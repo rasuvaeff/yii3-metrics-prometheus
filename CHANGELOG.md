@@ -19,3 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SanitizingRouteResolver` (opt-in) collapses id-like path segments for the RED
   `route` label.
 - `yiisoft/config` wiring binds only the core `MeterProviderInterface`.
+- `StorageFactory` gains the `pdo` adapter (MySQL/PostgreSQL/SQLite via a `dsn`
+  option) and now throws on an unknown adapter name instead of a silent
+  `in_memory` fallback.

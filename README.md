@@ -42,7 +42,7 @@ adapter via env:
 
 | Runtime | `PROMETHEUS_STORAGE` | Needs |
 |---|---|---|
-| php-fpm (multiple workers) | `apcu` or `redis` | `ext-apcu` / `ext-redis` |
+| php-fpm (multiple workers) | `apcu`, `redis`, or `pdo` | `ext-apcu` / `ext-redis` / a PDO DSN |
 | RoadRunner / Swoole (one long-running process) | `in_memory` | — |
 | CLI / tests | `in_memory` | — |
 
@@ -50,7 +50,15 @@ adapter via env:
 use Rasuvaeff\Yii3MetricsPrometheus\StorageFactory;
 
 $adapter = (new StorageFactory())->create('apcu');
+// or, without apcu/redis (MySQL, PostgreSQL, SQLite):
+$adapter = (new StorageFactory())->create('pdo', [
+    'dsn' => 'mysql:host=db;dbname=app',
+    'username' => 'app',
+    'password' => getenv('DB_PASSWORD'),
+]);
 ```
+
+An unknown adapter name throws (no silent fallback).
 
 ### The `/metrics` endpoint
 
@@ -92,7 +100,7 @@ combination.
 | `PrometheusMeter` / `PrometheusCounter` / `PrometheusGauge` / `PrometheusHistogram` | adapters |
 | `PrometheusRenderer` | render a registry as text exposition |
 | `MetricsEndpoint` | PSR-15 `/metrics` handler |
-| `StorageFactory` | build the storage adapter (`in_memory`/`apcu`/`redis`) |
+| `StorageFactory` | build the storage adapter (`in_memory`/`apcu`/`redis`/`pdo`) |
 | `SanitizingRouteResolver` | opt-in low-cardinality route label |
 
 ## Security
@@ -101,6 +109,9 @@ combination.
   `SanitizingRouteResolver` for the route label.
 - `php_info` and other promphp default metrics are disabled
   (`registerDefaultMetrics: false`).
+- **Protect `/metrics`**: the exposition reveals routes, traffic, and error
+  rates. Restrict it to your scrape network (firewall / ingress allowlist) or
+  put basic auth in front — do not expose it publicly.
 
 ## Examples
 

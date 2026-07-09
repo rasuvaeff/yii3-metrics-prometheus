@@ -22,7 +22,7 @@ Needs `ext-apcu` or `ext-redis` for multi-worker php-fpm.
 - Label values are positioned by DECLARED label-name order (`Internal\Labels`),
   never the sorted `LabelSet` map. A counter rejects a negative increment.
 - Multiprocess storage required for php-fpm (`InMemory` is per-worker): use
-  `apcu`/`redis` via `StorageFactory`.
+  `apcu`/`redis`/`pdo` via `StorageFactory`.
 
 ## API
 
@@ -33,7 +33,9 @@ use Prometheus\CollectorRegistry;
 use Rasuvaeff\Yii3Metrics\MetricRegistry;
 use Rasuvaeff\Yii3MetricsPrometheus\{PrometheusMeterProvider, StorageFactory};
 
-$storage  = (new StorageFactory())->create('apcu');        // 'in_memory' | 'apcu' | 'redis'
+$storage  = (new StorageFactory())->create('apcu');        // 'in_memory' | 'apcu' | 'redis' | 'pdo'
+// pdo: (new StorageFactory())->create('pdo', ['dsn' => 'mysql:host=db;dbname=app',
+//   'username' => ..., 'password' => ..., 'prefix' => 'prometheus_']); unknown adapter throws
 $registry = new CollectorRegistry($storage, false);        // false = no default metrics
 $metrics  = new MetricRegistry(new PrometheusMeterProvider($registry));
 
@@ -65,5 +67,5 @@ return [RouteResolverInterface::class => SanitizingRouteResolver::class];
 
 ### Storage / env
 
-`PROMETHEUS_STORAGE` = `in_memory` (default) | `apcu` | `redis`. `StorageFactory::
+`PROMETHEUS_STORAGE` = `in_memory` (default) | `apcu` | `redis` | `pdo`. `StorageFactory::
 create(string $adapter, array $options = []): Prometheus\Storage\Adapter`.

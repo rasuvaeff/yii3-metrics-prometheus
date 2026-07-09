@@ -43,6 +43,7 @@
     },
     "suggest": {
         "ext-apcu": "APCu shared storage — required for multi-worker php-fpm",
+        "ext-pdo": "PDO shared storage adapter (MySQL/PostgreSQL/SQLite) — alternative to APCu/Redis",
         "ext-redis": "Redis shared storage adapter (alternative to APCu)"
     },
     "repositories": [

@@ -68,7 +68,9 @@ block.
   suite.
 - **promphp `APC`/`Redis` adapters throw at construction if the extension is
   missing**, so `StorageFactory::create('apcu'|'redis')` is only exercised in the
-  Integration suite. Keep the `in_memory` default + fallback covered in Unit.
+  Integration suite. The `pdo` arm IS unit-tested (SQLite `:memory:`;
+  `pdo_sqlite` is in the CI extension list of every job). An unknown adapter
+  name throws `InvalidArgumentException` — no silent `in_memory` fallback.
 - **Multiprocess storage is mandatory for php-fpm** — the `in_memory` adapter is
   per-worker, so `/metrics` would only show the serving worker. Use `apcu`/`redis`
   (`StorageFactory`), documented in the README.

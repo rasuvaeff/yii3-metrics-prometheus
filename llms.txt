@@ -1,0 +1,69 @@
+# rasuvaeff/yii3-metrics-prometheus
+
+Prometheus backend for `rasuvaeff/yii3-metrics`: records the core `MetricRegistry`
+into `promphp/prometheus_client_php` and exposes `/metrics`. Namespace
+`Rasuvaeff\Yii3MetricsPrometheus`.
+
+## Install
+
+```bash
+composer require rasuvaeff/yii3-metrics-prometheus
+```
+
+Needs `ext-apcu` or `ext-redis` for multi-worker php-fpm.
+
+## Rules
+
+- Installing this binds the swappable core `MeterProviderInterface =>
+  PrometheusMeterProvider`. Do NOT also bind it (or `RouteResolverInterface`) —
+  `yiisoft/config` Duplicate key. `SanitizingRouteResolver` is opt-in (app rebinds
+  `RouteResolverInterface`).
+- `CollectorRegistry` is built with `registerDefaultMetrics: false` (no `php_info`).
+- Label values are positioned by DECLARED label-name order (`Internal\Labels`),
+  never the sorted `LabelSet` map. A counter rejects a negative increment.
+- Multiprocess storage required for php-fpm (`InMemory` is per-worker): use
+  `apcu`/`redis` via `StorageFactory`.
+
+## API
+
+### Wiring / provider
+
+```php
+use Prometheus\CollectorRegistry;
+use Rasuvaeff\Yii3Metrics\MetricRegistry;
+use Rasuvaeff\Yii3MetricsPrometheus\{PrometheusMeterProvider, StorageFactory};
+
+$storage  = (new StorageFactory())->create('apcu');        // 'in_memory' | 'apcu' | 'redis'
+$registry = new CollectorRegistry($storage, false);        // false = no default metrics
+$metrics  = new MetricRegistry(new PrometheusMeterProvider($registry));
+
+$metrics->counter('http_server_requests_total', 'help', ['method', 'route', 'status'])
+    ->inc(1.0, new \Rasuvaeff\Yii3Metrics\LabelSet(['method' => 'GET', 'route' => '/x', 'status' => '200']));
+```
+
+### /metrics endpoint (PSR-15)
+
+```php
+use Rasuvaeff\Yii3MetricsPrometheus\{MetricsEndpoint, PrometheusRenderer};
+
+$endpoint = new MetricsEndpoint($collectorRegistry, $psr17ResponseFactory);
+// Content-Type: text/plain; version=0.0.4
+
+echo (new PrometheusRenderer())->render($collectorRegistry); // raw exposition
+```
+
+### Cardinality (opt-in)
+
+```php
+// config/common/di.php
+use Rasuvaeff\Yii3Metrics\RouteResolverInterface;
+use Rasuvaeff\Yii3MetricsPrometheus\SanitizingRouteResolver;
+
+return [RouteResolverInterface::class => SanitizingRouteResolver::class];
+// /users/123 -> /users/:id ; UUIDs -> :uuid
+```
+
+### Storage / env
+
+`PROMETHEUS_STORAGE` = `in_memory` (default) | `apcu` | `redis`. `StorageFactory::
+create(string $adapter, array $options = []): Prometheus\Storage\Adapter`.

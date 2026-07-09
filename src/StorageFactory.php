@@ -54,15 +54,15 @@ final readonly class StorageFactory
         }
 
         $connection = new \PDO(
-            $dsn,
-            isset($options['username']) ? (string) $options['username'] : null,
-            isset($options['password']) ? (string) $options['password'] : null,
-            [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION],
+            dsn: $dsn,
+            username: isset($options['username']) ? (string) $options['username'] : null,
+            password: isset($options['password']) ? (string) $options['password'] : null,
+            options: [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION],
         );
 
         return new PdoAdapter(
-            $connection,
-            isset($options['prefix']) ? (string) $options['prefix'] : 'prometheus_',
+            database: $connection,
+            prefix: isset($options['prefix']) ? (string) $options['prefix'] : 'prometheus_',
         );
     }
 }

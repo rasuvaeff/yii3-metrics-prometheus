@@ -139,6 +139,7 @@ final class PrometheusExpositionTest
     {
         $upDown = $this->metrics->upDownCounter('inflight_requests', 'In flight', ['pool']);
         $again = $this->metrics->upDownCounter('inflight_requests', 'In flight', ['pool']);
+        Assert::same($again, $upDown);
 
         $labels = new LabelSet(['pool' => 'web']);
         $upDown->add(5.0, $labels);

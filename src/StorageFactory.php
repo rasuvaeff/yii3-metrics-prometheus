@@ -40,11 +40,18 @@ final readonly class StorageFactory
     public const string PDO = 'pdo';
 
     /**
+     * @param string $sapi injectable for tests only; the fpm warning keys off it
+     */
+    public function __construct(
+        private string $sapi = \PHP_SAPI,
+    ) {}
+
+    /**
      * @param array<string, mixed> $options adapter-specific options (e.g. Redis host/port, Predis connection parameters, PDO dsn)
      */
     public function create(string $adapter = self::IN_MEMORY, array $options = []): Adapter
     {
-        if ($adapter === self::IN_MEMORY && \PHP_SAPI === 'fpm-fcgi') {
+        if ($adapter === self::IN_MEMORY && $this->sapi === 'fpm-fcgi') {
             trigger_error(
                 'Prometheus "in_memory" storage under php-fpm is per-worker: /metrics will expose only the serving worker. Use a shared adapter (apcu/apcng/redis/predis/pdo)',
                 E_USER_WARNING,
@@ -63,9 +70,16 @@ final readonly class StorageFactory
     }
 
     /**
+     * Normalized PDO settings: validated dsn plus username/password/prefix
+     * with their defaults applied.
+     *
      * @param array<string, mixed> $options
+     *
+     * @return array{dsn: string, username: ?string, password: ?string, prefix: string}
+     *
+     * @internal exposed for tests
      */
-    private function pdo(array $options): PdoAdapter
+    public function pdoConfig(array $options): array
     {
         $dsn = $options['dsn'] ?? null;
 
@@ -73,16 +87,31 @@ final readonly class StorageFactory
             throw new InvalidArgumentException('PDO storage requires a non-empty "dsn" option');
         }
 
+        return [
+            'dsn' => $dsn,
+            'username' => isset($options['username']) ? (string) $options['username'] : null,
+            'password' => isset($options['password']) ? (string) $options['password'] : null,
+            'prefix' => isset($options['prefix']) ? (string) $options['prefix'] : 'prometheus_',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function pdo(array $options): PdoAdapter
+    {
+        $config = $this->pdoConfig($options);
+
         $connection = new \PDO(
-            dsn: $dsn,
-            username: isset($options['username']) ? (string) $options['username'] : null,
-            password: isset($options['password']) ? (string) $options['password'] : null,
+            dsn: $config['dsn'],
+            username: $config['username'],
+            password: $config['password'],
             options: [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION],
         );
 
         return new PdoAdapter(
             database: $connection,
-            prefix: isset($options['prefix']) ? (string) $options['prefix'] : 'prometheus_',
+            prefix: $config['prefix'],
         );
     }
 }

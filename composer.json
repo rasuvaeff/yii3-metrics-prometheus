@@ -48,18 +48,6 @@
         "ext-redis": "Redis shared storage adapter (alternative to APCu)",
         "predis/predis": "Pure-PHP Redis client for the predis storage adapter (no ext-redis needed)"
     },
-    "repositories": [
-        {
-            "name": "metrics",
-            "type": "path",
-            "url": "/repo/yii3-metrics",
-            "options": {
-                "versions": {
-                    "rasuvaeff/yii3-metrics": "1.0.0"
-                }
-            }
-        }
-    ],
     "autoload": {
         "psr-4": {
             "Rasuvaeff\\Yii3MetricsPrometheus\\": "src/"

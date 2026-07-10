@@ -19,6 +19,8 @@ Needs `ext-apcu` or `ext-redis` for multi-worker php-fpm.
   `yiisoft/config` Duplicate key. `SanitizingRouteResolver` is opt-in (app rebinds
   `RouteResolverInterface`).
 - `CollectorRegistry` is built with `registerDefaultMetrics: false` (no `php_info`).
+- `upDownCounter()` renders as a Prometheus GAUGE (`incBy` deltas into shared
+  storage — the Prometheus model for up-down values; aggregates across workers).
 - Label values are positioned by DECLARED label-name order (`Internal\Labels`),
   never the sorted `LabelSet` map. A counter rejects a negative increment.
 - Multiprocess storage required for php-fpm (`InMemory` is per-worker; selecting

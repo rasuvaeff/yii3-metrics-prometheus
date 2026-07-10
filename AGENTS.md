@@ -12,9 +12,10 @@ cardinality-sanitizing route resolver.
 Namespace: `Rasuvaeff\Yii3MetricsPrometheus`.
 
 Public API: `PrometheusMeterProvider` (implements core `MeterProviderInterface`),
-`PrometheusMeter`, `PrometheusCounter` / `PrometheusGauge` / `PrometheusHistogram`
-(adapters), `PrometheusRenderer`, `MetricsEndpoint` (PSR-15), `StorageFactory`,
-`SanitizingRouteResolver`.
+`PrometheusMeter`, `PrometheusCounter` / `PrometheusGauge` /
+`PrometheusUpDownCounter` (rendered as a Prometheus gauge) /
+`PrometheusHistogram` (adapters), `PrometheusRenderer`, `MetricsEndpoint`
+(PSR-15), `StorageFactory`, `SanitizingRouteResolver`.
 
 ## DI wiring — the backend side of core+backend
 

@@ -15,6 +15,7 @@ use Rasuvaeff\Yii3MetricsPrometheus\PrometheusHistogram;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusMeter;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusMeterProvider;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusRenderer;
+use Rasuvaeff\Yii3MetricsPrometheus\PrometheusUpDownCounter;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Lifecycle\BeforeTest;
@@ -24,6 +25,7 @@ use Testo\Test;
 #[Covers(PrometheusMeter::class)]
 #[Covers(PrometheusCounter::class)]
 #[Covers(PrometheusGauge::class)]
+#[Covers(PrometheusUpDownCounter::class)]
 #[Covers(PrometheusHistogram::class)]
 #[Covers(PrometheusMeterProvider::class)]
 #[Covers(PrometheusRenderer::class)]
@@ -131,6 +133,20 @@ final class PrometheusExpositionTest
         Assert::string($text)->contains('c_total{a="2"} 1');
         Assert::string($text)->contains('g_val{a="3"} 9');
         Assert::string($text)->contains('h_sec_count{a="2"} 1');
+    }
+
+    public function upDownCounterAggregatesSignedDeltasOnOneSeries(): void
+    {
+        $upDown = $this->metrics->upDownCounter('inflight_requests', 'In flight', ['pool']);
+        $again = $this->metrics->upDownCounter('inflight_requests', 'In flight', ['pool']);
+
+        $labels = new LabelSet(['pool' => 'web']);
+        $upDown->add(5.0, $labels);
+        $again->add(-2.0, $labels);
+
+        $text = $this->render();
+        Assert::string($text)->contains('# TYPE inflight_requests gauge');
+        Assert::string($text)->contains('inflight_requests{pool="web"} 3');
     }
 
     public function undeclaredLabelThrowsInsteadOfSilentEmptyValue(): void

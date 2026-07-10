@@ -9,6 +9,7 @@ use Rasuvaeff\Yii3Metrics\CounterInterface;
 use Rasuvaeff\Yii3Metrics\GaugeInterface;
 use Rasuvaeff\Yii3Metrics\HistogramInterface;
 use Rasuvaeff\Yii3Metrics\MeterInterface;
+use Rasuvaeff\Yii3Metrics\UpDownCounterInterface;
 
 /**
  * Meter backed by a promphp {@see CollectorRegistry}. Instruments are memoized by
@@ -24,6 +25,9 @@ final class PrometheusMeter implements MeterInterface
 
     /** @var array<string, PrometheusGauge> */
     private array $gauges = [];
+
+    /** @var array<string, PrometheusUpDownCounter> */
+    private array $upDownCounters = [];
 
     /** @var array<string, PrometheusHistogram> */
     private array $histograms = [];
@@ -46,6 +50,17 @@ final class PrometheusMeter implements MeterInterface
     public function gauge(string $name, string $help = '', array $labelNames = []): GaugeInterface
     {
         return $this->gauges[$name] ??= new PrometheusGauge(
+            $this->registry->getOrRegisterGauge($this->namespace, $name, $help, $labelNames),
+            $labelNames,
+        );
+    }
+
+    #[\Override]
+    public function upDownCounter(string $name, string $help = '', array $labelNames = []): UpDownCounterInterface
+    {
+        // The Prometheus model for an up-down value is a gauge; deltas land in
+        // the shared storage via incBy, so every worker adds to one series.
+        return $this->upDownCounters[$name] ??= new PrometheusUpDownCounter(
             $this->registry->getOrRegisterGauge($this->namespace, $name, $help, $labelNames),
             $labelNames,
         );

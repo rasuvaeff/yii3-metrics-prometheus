@@ -114,7 +114,7 @@ Set `PROMETHEUS_NAMESPACE` (params `namespace`) to prefix every metric:
 | Class | Purpose |
 |---|---|
 | `PrometheusMeterProvider` | core `MeterProviderInterface` over a promphp `CollectorRegistry` |
-| `PrometheusMeter` / `PrometheusCounter` / `PrometheusGauge` / `PrometheusHistogram` | adapters |
+| `PrometheusMeter` / `PrometheusCounter` / `PrometheusGauge` / `PrometheusUpDownCounter` / `PrometheusHistogram` | adapters |
 | `PrometheusRenderer` | render a registry as text exposition |
 | `MetricsEndpoint` | PSR-15 `/metrics` handler |
 | `StorageFactory` | build the storage adapter (`in_memory`/`apcu`/`apcng`/`redis`/`predis`/`pdo`) |

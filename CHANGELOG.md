@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (typo guard); missing declared labels still render as empty strings.
 - Optional metric namespace (`PROMETHEUS_NAMESPACE` / params `namespace`)
   prefixing every metric name.
+- `PrometheusUpDownCounter` — core `UpDownCounterInterface` rendered as a
+  Prometheus gauge (`incBy` deltas into shared storage), aggregating correctly
+  across php-fpm workers.
 
 - Prometheus backend for `rasuvaeff/yii3-metrics` over
   `promphp/prometheus_client_php`.

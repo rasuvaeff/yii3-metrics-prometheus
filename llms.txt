@@ -21,8 +21,11 @@ Needs `ext-apcu` or `ext-redis` for multi-worker php-fpm.
 - `CollectorRegistry` is built with `registerDefaultMetrics: false` (no `php_info`).
 - Label values are positioned by DECLARED label-name order (`Internal\Labels`),
   never the sorted `LabelSet` map. A counter rejects a negative increment.
-- Multiprocess storage required for php-fpm (`InMemory` is per-worker): use
-  `apcu`/`redis`/`pdo` via `StorageFactory`.
+- Multiprocess storage required for php-fpm (`InMemory` is per-worker; selecting
+  it under fpm raises E_USER_WARNING): use `apcng` (recommended) / `apcu` /
+  `redis` / `predis` / `pdo` via `StorageFactory`.
+- Undeclared label name in a LabelSet at record time => InvalidArgumentException
+  (typo guard); missing declared label renders as "".
 
 ## API
 
@@ -33,7 +36,7 @@ use Prometheus\CollectorRegistry;
 use Rasuvaeff\Yii3Metrics\MetricRegistry;
 use Rasuvaeff\Yii3MetricsPrometheus\{PrometheusMeterProvider, StorageFactory};
 
-$storage  = (new StorageFactory())->create('apcu');        // 'in_memory' | 'apcu' | 'redis' | 'pdo'
+$storage  = (new StorageFactory())->create('apcng');       // 'in_memory' | 'apcu' | 'apcng' | 'redis' | 'predis' | 'pdo'
 // pdo: (new StorageFactory())->create('pdo', ['dsn' => 'mysql:host=db;dbname=app',
 //   'username' => ..., 'password' => ..., 'prefix' => 'prometheus_']); unknown adapter throws
 $registry = new CollectorRegistry($storage, false);        // false = no default metrics
@@ -67,5 +70,5 @@ return [RouteResolverInterface::class => SanitizingRouteResolver::class];
 
 ### Storage / env
 
-`PROMETHEUS_STORAGE` = `in_memory` (default) | `apcu` | `redis` | `pdo`. `StorageFactory::
+`PROMETHEUS_STORAGE` = `in_memory` (default) | `apcu` | `apcng` | `redis` | `predis` | `pdo`. `PROMETHEUS_NAMESPACE` prefixes every metric name. `StorageFactory::
 create(string $adapter, array $options = []): Prometheus\Storage\Adapter`.

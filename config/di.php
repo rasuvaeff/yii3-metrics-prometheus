@@ -24,5 +24,8 @@ return [
     // registerDefaultMetrics=false — keep php_info and friends out of the exposition.
     CollectorRegistry::class => static fn (Adapter $adapter): CollectorRegistry => new CollectorRegistry($adapter, false),
 
-    MeterProviderInterface::class => static fn (CollectorRegistry $registry): MeterProviderInterface => new PrometheusMeterProvider($registry),
+    MeterProviderInterface::class => static fn (CollectorRegistry $registry): MeterProviderInterface => new PrometheusMeterProvider(
+        $registry,
+        (string) ($params['rasuvaeff/yii3-metrics-prometheus']['namespace'] ?? ''),
+    ),
 ];

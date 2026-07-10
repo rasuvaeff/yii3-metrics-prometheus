@@ -8,6 +8,7 @@ use Prometheus\CollectorRegistry;
 use Prometheus\RenderTextFormat;
 use Prometheus\Storage\InMemory;
 use Prometheus\Storage\PDO as PdoAdapter;
+use Prometheus\Storage\Predis;
 use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
 use Rasuvaeff\Yii3MetricsPrometheus\StorageFactory;
 use Testo\Assert;
@@ -39,9 +40,17 @@ final class StorageFactoryTest
         Assert::string($text)->contains('orders_total{channel="web"} 2');
     }
 
-    // 'apcu'/'apc'/'redis' construct promphp adapters that eagerly require the
-    // ext-apcu / ext-redis extension, so they are exercised in the (ext-gated)
-    // Integration suite, not here.
+    // 'apcu'/'apc'/'apcng'/'redis' construct promphp adapters that eagerly
+    // require the ext-apcu / ext-redis extension, so they are exercised in the
+    // (ext-gated) Integration suite, not here.
+
+    public function createsPredisAdapterWithoutConnecting(): void
+    {
+        // predis/predis connects lazily, so construction is safe without a server.
+        $adapter = (new StorageFactory())->create(StorageFactory::PREDIS, ['host' => '127.0.0.1']);
+
+        Assert::instanceOf($adapter, Predis::class);
+    }
 
     #[DataProvider('invalidProvider')]
     public function throwsOnInvalidConfiguration(string $adapter, array $options, string $needle): void

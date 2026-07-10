@@ -66,14 +66,19 @@ block.
   register → record → render (names, label order, cumulative buckets, no
   `php_info`). Real APCu/Redis round-trips live in the (ext-gated) `Integration`
   suite.
-- **promphp `APC`/`Redis` adapters throw at construction if the extension is
-  missing**, so `StorageFactory::create('apcu'|'redis')` is only exercised in the
-  Integration suite. The `pdo` arm IS unit-tested (SQLite `:memory:`;
+- **promphp `APC`/`APCng`/`Redis` adapters throw at construction if the
+  extension is missing**, so `StorageFactory::create('apcu'|'apcng'|'redis')` is
+  only exercised in the Integration suite; `predis` constructs lazily (predis
+  connects on first command) and IS unit-tested. The `pdo` arm IS unit-tested (SQLite `:memory:`;
   `pdo_sqlite` is in the CI extension list of every job). An unknown adapter
   name throws `InvalidArgumentException` — no silent `in_memory` fallback.
 - **Multiprocess storage is mandatory for php-fpm** — the `in_memory` adapter is
-  per-worker, so `/metrics` would only show the serving worker. Use `apcu`/`redis`
-  (`StorageFactory`), documented in the README.
+  per-worker, so `/metrics` would only show the serving worker; `StorageFactory`
+  raises `E_USER_WARNING` for that combination (`PHP_SAPI === 'fpm-fcgi'`). Use
+  `apcng`/`apcu`/`redis`/`predis`/`pdo`, documented in the README.
+- **`Internal\Labels::order()` throws on an undeclared label** (typo guard) and
+  renders missing declared labels as empty strings — both covered in
+  `PrometheusExpositionTest`.
 - Code: `declare(strict_types=1)`, `final readonly class`, `#[\Override]`,
   explicit types.
 - **CI workflows are SHA-pinned** (`uses:` → 40-char SHA + `# vN`),

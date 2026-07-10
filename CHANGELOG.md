@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 1.0.0 — Unreleased
 
+- `StorageFactory`: `apcng` (recommended APCu adapter) and `predis` (pure-PHP
+  Redis client) storage adapters; `in_memory` under php-fpm now raises an
+  `E_USER_WARNING` instead of silently exposing one worker's counters.
+- Recording with an undeclared label name throws `InvalidArgumentException`
+  (typo guard); missing declared labels still render as empty strings.
+- Optional metric namespace (`PROMETHEUS_NAMESPACE` / params `namespace`)
+  prefixing every metric name.
+
 - Prometheus backend for `rasuvaeff/yii3-metrics` over
   `promphp/prometheus_client_php`.
 - `PrometheusMeterProvider` / `PrometheusMeter` / `PrometheusCounter` /

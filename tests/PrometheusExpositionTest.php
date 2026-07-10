@@ -133,6 +133,35 @@ final class PrometheusExpositionTest
         Assert::string($text)->contains('h_sec_count{a="2"} 1');
     }
 
+    public function undeclaredLabelThrowsInsteadOfSilentEmptyValue(): void
+    {
+        $counter = $this->metrics->counter('orders_total', 'Orders', ['channel']);
+
+        try {
+            $counter->inc(1.0, new LabelSet(['chanel' => 'web'])); // typo'd label name
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('Undeclared label');
+            Assert::string($e->getMessage())->contains('chanel');
+        }
+    }
+
+    public function missingDeclaredLabelRendersEmptyValue(): void
+    {
+        $this->metrics->counter('orders_total', 'Orders', ['channel'])
+            ->inc(1.0, new LabelSet([]));
+
+        Assert::string($this->render())->contains('orders_total{channel=""} 1');
+    }
+
+    public function namespacePrefixesEveryMetricName(): void
+    {
+        $metrics = new MetricRegistry(new PrometheusMeterProvider($this->registry, 'checkout'));
+        $metrics->counter('orders_total', 'Orders')->inc();
+
+        Assert::string($this->render())->contains('checkout_orders_total 1');
+    }
+
     public function providerReturnsTheSameMeter(): void
     {
         $provider = new PrometheusMeterProvider($this->registry);

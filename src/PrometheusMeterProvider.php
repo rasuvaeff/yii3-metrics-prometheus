@@ -12,6 +12,9 @@ use Rasuvaeff\Yii3Metrics\MeterProviderInterface;
  * Backend {@see MeterProviderInterface} over a promphp {@see CollectorRegistry}.
  * This is the single binding that owns the swappable provider key in the app.
  *
+ * `$namespace` prefixes every metric name in the exposition
+ * (`<namespace>_<name>`) — promphp's standard namespacing.
+ *
  * @api
  */
 final class PrometheusMeterProvider implements MeterProviderInterface
@@ -20,12 +23,13 @@ final class PrometheusMeterProvider implements MeterProviderInterface
 
     public function __construct(
         private readonly CollectorRegistry $registry,
+        private readonly string $namespace = '',
     ) {}
 
     #[\Override]
     public function getMeter(?string $name = null): MeterInterface
     {
-        return $this->meter ??= new PrometheusMeter($this->registry);
+        return $this->meter ??= new PrometheusMeter($this->registry, $this->namespace);
     }
 
     public function registry(): CollectorRegistry

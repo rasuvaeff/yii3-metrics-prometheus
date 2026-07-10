@@ -35,6 +35,7 @@
         "infection/infection": "^0.33",
         "maglnet/composer-require-checker": "^4.17",
         "nyholm/psr7": "^1.8",
+        "predis/predis": "^2.2 || ^3.0",
         "rector/rector": "^2.4",
         "roave/backward-compatibility-check": "^8.0",
         "testo/bridge-infection": "^0.1.6",
@@ -44,7 +45,8 @@
     "suggest": {
         "ext-apcu": "APCu shared storage — required for multi-worker php-fpm",
         "ext-pdo": "PDO shared storage adapter (MySQL/PostgreSQL/SQLite) — alternative to APCu/Redis",
-        "ext-redis": "Redis shared storage adapter (alternative to APCu)"
+        "ext-redis": "Redis shared storage adapter (alternative to APCu)",
+        "predis/predis": "Pure-PHP Redis client for the predis storage adapter (no ext-redis needed)"
     },
     "repositories": [
         {

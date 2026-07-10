@@ -20,7 +20,7 @@ and exposes them at a `/metrics` endpoint.
 - PHP 8.3+
 - `rasuvaeff/yii3-metrics` ^1.0
 - `promphp/prometheus_client_php` ^2.0
-- A shared storage extension for php-fpm: `ext-apcu` or `ext-redis`
+- A shared storage backend for php-fpm: `ext-apcu`, `ext-redis`, `predis/predis`, or a PDO DSN
 
 ## Installation
 
@@ -42,14 +42,20 @@ adapter via env:
 
 | Runtime | `PROMETHEUS_STORAGE` | Needs |
 |---|---|---|
-| php-fpm (multiple workers) | `apcu`, `redis`, or `pdo` | `ext-apcu` / `ext-redis` / a PDO DSN |
+| php-fpm (multiple workers) | `apcng` (recommended), `apcu`, `redis`, `predis`, or `pdo` | `ext-apcu` / `ext-redis` / `predis/predis` / a PDO DSN |
 | RoadRunner / Swoole (one long-running process) | `in_memory` | — |
 | CLI / tests | `in_memory` | — |
+
+`apcng` is promphp's newer APCu adapter with much cheaper scrape-time collection
+on large registries — prefer it over `apcu` for new deployments. `predis` uses
+the pure-PHP client (no `ext-redis`).
 
 ```php
 use Rasuvaeff\Yii3MetricsPrometheus\StorageFactory;
 
-$adapter = (new StorageFactory())->create('apcu');
+$adapter = (new StorageFactory())->create('apcng');
+// pure-PHP Redis client (no ext-redis):
+$adapter = (new StorageFactory())->create('predis', ['host' => 'redis', 'port' => 6379]);
 // or, without apcu/redis (MySQL, PostgreSQL, SQLite):
 $adapter = (new StorageFactory())->create('pdo', [
     'dsn' => 'mysql:host=db;dbname=app',
@@ -58,7 +64,9 @@ $adapter = (new StorageFactory())->create('pdo', [
 ]);
 ```
 
-An unknown adapter name throws (no silent fallback).
+An unknown adapter name throws (no silent fallback), and selecting `in_memory`
+under php-fpm raises an `E_USER_WARNING` — a scrape that silently shows one
+worker's counters is worse than a visible warning.
 
 ### The `/metrics` endpoint
 
@@ -92,6 +100,15 @@ return [
 Keep label values low-cardinality — one time series is created per unique label
 combination.
 
+Recording with a label name that was **not declared** at registration throws
+`InvalidArgumentException` (a typo'd label would otherwise silently record under
+an empty value); a declared-but-missing label renders as an empty string.
+
+### Metric namespace
+
+Set `PROMETHEUS_NAMESPACE` (params `namespace`) to prefix every metric:
+`checkout_http_server_requests_total`. Empty by default.
+
 ### Classes
 
 | Class | Purpose |
@@ -100,7 +117,7 @@ combination.
 | `PrometheusMeter` / `PrometheusCounter` / `PrometheusGauge` / `PrometheusHistogram` | adapters |
 | `PrometheusRenderer` | render a registry as text exposition |
 | `MetricsEndpoint` | PSR-15 `/metrics` handler |
-| `StorageFactory` | build the storage adapter (`in_memory`/`apcu`/`redis`/`pdo`) |
+| `StorageFactory` | build the storage adapter (`in_memory`/`apcu`/`apcng`/`redis`/`predis`/`pdo`) |
 | `SanitizingRouteResolver` | opt-in low-cardinality route label |
 
 ## Security

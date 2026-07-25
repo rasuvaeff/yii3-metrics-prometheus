@@ -136,6 +136,26 @@ Set `PROMETHEUS_NAMESPACE` (params `namespace`) to prefix every metric:
 Runnable, server-independent scripts in [`examples/`](examples/). See
 [`examples/README.md`](examples/README.md).
 
+### Dependency analysers
+
+This leaf package is selected by the root application through config-plugin and
+may legitimately have no class reference in an autoloaded source directory. Keep
+the direct dependency: the application, not a core package, selects the backend
+or bridge. Scope the Composer Dependency Analyser exception to this package:
+
+```php
+use ShipMonk\ComposerDependencyAnalyser\Config\Configuration;
+use ShipMonk\ComposerDependencyAnalyser\Config\ErrorType;
+
+return (new Configuration())->ignoreErrorsOnPackage(
+    'rasuvaeff/yii3-metrics-prometheus',
+    [ErrorType::UNUSED_DEPENDENCY],
+);
+```
+
+`composer-require-checker` detects used but undeclared symbols, not unused
+packages, so this config-only dependency needs no require-checker suppression.
+
 ## Development
 
 The core is resolved via a path repository, so run Docker with the **monorepo

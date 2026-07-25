@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.1 — 2026-07-25
+
+- Reject trailing newlines in route-id sanitization: anchor `ID_PATTERN` and
+  `UUID_PATTERN` in `SanitizingRouteResolver` with `\z` instead of `$` (PCRE `$`
+  matches before a trailing `\n`). Hygiene only — PSR-7 rejects literal LF in
+  URI path upstream, so the smuggling vector is not reachable through the
+  standard request pipeline; the change keeps the patterns whole-subject.
+
 ## 1.0.0 — 2026-07-10
 
 - `StorageFactory`: `apcng` (recommended APCu adapter) and `predis` (pure-PHP

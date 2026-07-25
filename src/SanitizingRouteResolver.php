@@ -20,8 +20,8 @@ use Rasuvaeff\Yii3Metrics\RouteResolverInterface;
  */
 final readonly class SanitizingRouteResolver implements RouteResolverInterface
 {
-    private const string ID_PATTERN = '/^\d+$/';
-    private const string UUID_PATTERN = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
+    private const string ID_PATTERN = '/^\d+\z/';
+    private const string UUID_PATTERN = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i';
 
     #[\Override]
     public function resolve(ServerRequestInterface $request): string

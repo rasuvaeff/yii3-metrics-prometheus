@@ -9,6 +9,7 @@ use Prometheus\Storage\InMemory;
 use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
 use Rasuvaeff\Yii3Metrics\LabelSet;
 use Rasuvaeff\Yii3Metrics\MetricRegistry;
+use Rasuvaeff\Yii3MetricsPrometheus\Internal\Labels;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusCounter;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusGauge;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusHistogram;
@@ -29,6 +30,7 @@ use Testo\Test;
 #[Covers(PrometheusHistogram::class)]
 #[Covers(PrometheusMeterProvider::class)]
 #[Covers(PrometheusRenderer::class)]
+#[Covers(Labels::class)]
 final class PrometheusExpositionTest
 {
     private CollectorRegistry $registry;

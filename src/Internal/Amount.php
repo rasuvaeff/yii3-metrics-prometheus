@@ -19,7 +19,7 @@ use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
  *
  * @internal
  */
-final class Amount
+final readonly class Amount
 {
     private function __construct() {}
 

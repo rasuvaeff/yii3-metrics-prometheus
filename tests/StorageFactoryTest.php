@@ -52,12 +52,26 @@ final class StorageFactoryTest
         $logger = $this->recordingLogger();
         $factory = new StorageFactory(sapi: 'fpm-fcgi', logger: $logger);
 
-        $adapter = $factory->create();
+        // Pin the error_log() arm too: without the `return` in report() the
+        // logger path would ALSO write to error_log, and this test would stay
+        // green. The sink must remain empty when a logger is present.
+        $sink = tempnam(sys_get_temp_dir(), 'metrics-error-log-');
+        $previousSink = ini_set('error_log', $sink);
+
+        try {
+            $adapter = $factory->create();
+        } finally {
+            ini_set('error_log', $previousSink === false ? '' : $previousSink);
+        }
+
+        $logged = (string) file_get_contents($sink);
+        unlink($sink);
 
         Assert::instanceOf($adapter, InMemory::class);
         Assert::count($logger->records, 1);
         Assert::same($logger->records[0]['level'], LogLevel::WARNING);
         Assert::string($logger->records[0]['message'])->contains('per-worker');
+        Assert::same($logged, '');
     }
 
     /**
@@ -149,7 +163,7 @@ final class StorageFactoryTest
             public array $records = [];
 
             #[\Override]
-            public function log($level, string|\Stringable $message, array $context = []): void
+            public function log($level, $message, array $context = []): void
             {
                 $this->records[] = ['level' => $level, 'message' => (string) $message];
             }

@@ -90,8 +90,9 @@ rather than assuming the sibling directory is in play. The OTLP backend
 - **Recording guards must mirror the core's.** `Internal\Amount::assertFinite()`
   on `inc`/`observe`/`add` and gauge `inc`/`dec`; `assertNotNan()` on gauge
   `set()` (promphp renders `+Inf`/`-Inf` but coerces `NAN` to an invalid token
-  while raising a PHP warning). promphp guards neither, and its storage adapters
-  are shared and durable, so an unguarded `NAN` outlives the request.
+  while raising a PHP warning). The promphp client guards neither, and its
+  storage adapters are shared and durable, so an unguarded `NAN` outlives the
+  request.
 - **`Internal\Labels::order()` throws on an undeclared label** (typo guard) and
   renders missing declared labels as empty strings — both covered in
   `PrometheusExpositionTest`.

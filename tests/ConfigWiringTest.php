@@ -54,7 +54,7 @@ final class ConfigWiringTest
             public array $messages = [];
 
             #[\Override]
-            public function log($level, string|\Stringable $message, array $context = []): void
+            public function log($level, $message, array $context = []): void
             {
                 $this->messages[] = (string) $message;
             }

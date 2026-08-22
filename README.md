@@ -119,6 +119,15 @@ Recording with a label name that was **not declared** at registration throws
 `InvalidArgumentException` (a typo'd label would otherwise silently record under
 an empty value); a declared-but-missing label renders as an empty string.
 
+### Numeric input contract
+
+Recorded amounts must be finite: `inc`/`observe`/`add` and gauge `inc`/`dec`
+throw on `NAN`/`±INF`; gauge `set()` allows `±INF` but throws on `NAN`
+(promphp has no renderable NaN token). Mirrors the core contract, so the same
+code cannot behave differently per backend — and nothing non-finite reaches the
+shared, durable storage adapters, where a single unguarded `NAN` would poison
+the series total until the storage is flushed.
+
 ### Metric namespace
 
 Set `PROMETHEUS_NAMESPACE` (params `namespace`) to prefix every metric:

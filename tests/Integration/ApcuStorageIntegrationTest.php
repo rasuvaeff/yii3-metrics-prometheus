@@ -32,7 +32,7 @@ final class ApcuStorageIntegrationTest
         $storage = (new StorageFactory())->create(StorageFactory::APCU);
         $storage->wipeStorage();
 
-        $registry = new CollectorRegistry($storage, false);
+        $registry = new CollectorRegistry($storage, registerDefaultMetrics: false);
         $metrics = new MetricRegistry(new PrometheusMeterProvider($registry));
         $metrics->counter('apcu_probe_total', 'probe')->inc();
 

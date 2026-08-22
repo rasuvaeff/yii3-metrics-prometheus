@@ -6,6 +6,8 @@ namespace Rasuvaeff\Yii3MetricsPrometheus\Tests;
 
 use Prometheus\CollectorRegistry;
 use Prometheus\Storage\Adapter;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
 use Rasuvaeff\Yii3Metrics\MeterProviderInterface;
 use Rasuvaeff\Yii3Metrics\RouteResolverInterface;
 use Rasuvaeff\Yii3MetricsPrometheus\MetricsEndpoint;
@@ -36,11 +38,39 @@ final class ConfigWiringTest
         Assert::array($this->di())->doesNotHaveKeys(RouteResolverInterface::class);
     }
 
+    /**
+     * The factory is bound explicitly so the application logger reaches the
+     * "in_memory under php-fpm" report. The parameter stays optional, so an
+     * application with no PSR-3 binding still resolves.
+     */
+    public function storageFactoryIsBoundWithAnOptionalLogger(): void
+    {
+        $definition = $this->di()[StorageFactory::class];
+
+        Assert::instanceOf($definition(null), StorageFactory::class);
+
+        $logger = new class extends AbstractLogger {
+            /** @var list<string> */
+            public array $messages = [];
+
+            #[\Override]
+            public function log($level, $message, array $context = []): void
+            {
+                $this->messages[] = (string) $message;
+            }
+        };
+
+        /** @var StorageFactory $factory */
+        $factory = $definition($logger);
+        Assert::instanceOf($factory, StorageFactory::class);
+        Assert::instanceOf($logger, LoggerInterface::class);
+    }
+
     public function factoryChainResolvesIntoAWorkingMeter(): void
     {
         $di = $this->di();
 
-        $adapter = $di[Adapter::class](new StorageFactory());
+        $adapter = $di[Adapter::class]($di[StorageFactory::class](null));
         Assert::instanceOf($adapter, Adapter::class);
 
         $registry = $di[CollectorRegistry::class]($adapter);

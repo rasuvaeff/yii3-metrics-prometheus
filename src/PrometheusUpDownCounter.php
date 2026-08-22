@@ -7,6 +7,7 @@ namespace Rasuvaeff\Yii3MetricsPrometheus;
 use Prometheus\Gauge;
 use Rasuvaeff\Yii3Metrics\LabelSet;
 use Rasuvaeff\Yii3Metrics\UpDownCounterInterface;
+use Rasuvaeff\Yii3MetricsPrometheus\Internal\Amount;
 use Rasuvaeff\Yii3MetricsPrometheus\Internal\Labels;
 
 /**
@@ -29,6 +30,8 @@ final readonly class PrometheusUpDownCounter implements UpDownCounterInterface
     #[\Override]
     public function add(float $delta, LabelSet $labels = new LabelSet()): void
     {
+        Amount::assertFinite($delta);
+
         $this->gauge->incBy($delta, Labels::order($labels, $this->labelNames));
     }
 }

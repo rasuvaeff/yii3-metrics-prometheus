@@ -24,8 +24,16 @@ Needs `ext-apcu` or `ext-redis` for multi-worker php-fpm.
 - Label values are positioned by DECLARED label-name order (`Internal\Labels`),
   never the sorted `LabelSet` map. A counter rejects a negative increment.
 - Multiprocess storage required for php-fpm (`InMemory` is per-worker; selecting
-  it under fpm raises E_USER_WARNING): use `apcng` (recommended) / `apcu` /
-  `redis` / `predis` / `pdo` via `StorageFactory`.
+  it under fpm is reported via the optional PSR-3 logger, else `error_log()` —
+  never `trigger_error`, which yiisoft/error-handler turns into an
+  ErrorException): use `apcng` (recommended) / `apcu` / `redis` / `predis` /
+  `pdo` via `StorageFactory`.
+- Recorded amounts must be finite: `inc`/`observe`/`add` and gauge `inc`/`dec`
+  throw on `NAN`/`±INF`; gauge `set()` allows `±INF` but throws on `NAN`
+  (promphp has no renderable NaN token). Mirrors the core contract.
+- The core's default `route` label is the constant `(unset)`; `SanitizingRouteResolver`
+  is one opt-in (collapses numeric ids and UUIDs only — it neither bounds
+  cardinality nor hides path secrets).
 - Undeclared label name in a LabelSet at record time => InvalidArgumentException
   (typo guard); missing declared label renders as "".
 

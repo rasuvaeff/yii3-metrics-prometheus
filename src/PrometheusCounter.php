@@ -8,11 +8,12 @@ use Prometheus\Counter;
 use Rasuvaeff\Yii3Metrics\CounterInterface;
 use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
 use Rasuvaeff\Yii3Metrics\LabelSet;
+use Rasuvaeff\Yii3MetricsPrometheus\Internal\Amount;
 use Rasuvaeff\Yii3MetricsPrometheus\Internal\Labels;
 
 /**
  * Adapts a promphp counter to the core {@see CounterInterface}. Like any
- * recording counter it rejects a negative increment.
+ * recording counter it rejects a negative increment, and a non-finite one.
  *
  * @api
  */
@@ -29,6 +30,8 @@ final readonly class PrometheusCounter implements CounterInterface
     #[\Override]
     public function inc(float $amount = 1.0, LabelSet $labels = new LabelSet()): void
     {
+        Amount::assertFinite($amount);
+
         if ($amount < 0) {
             throw new InvalidArgumentException('Counter cannot be decremented; use a gauge');
         }

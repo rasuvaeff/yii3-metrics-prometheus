@@ -66,8 +66,14 @@ $adapter = (new StorageFactory())->create('pdo', [
 ```
 
 An unknown adapter name throws (no silent fallback), and selecting `in_memory`
-under php-fpm raises an `E_USER_WARNING` — a scrape that silently shows one
-worker's counters is worse than a visible warning.
+under php-fpm is **reported** — a scrape that silently shows one worker's
+counters is worse than a visible note. The report goes to the application's PSR-3
+logger (the package DI passes it in), or to `error_log()` when there is none.
+
+> It is deliberately **not** a PHP warning. `yiisoft/error-handler` converts
+> warnings into `ErrorException`, so a `trigger_error()` here would make the
+> shipped default configuration (`in_memory` + php-fpm) throw out of the DI
+> factory and 500 every request that touches metrics.
 
 ### The `/metrics` endpoint
 
@@ -84,9 +90,17 @@ $endpoint = new MetricsEndpoint($collectorRegistry, $responseFactory);
 ### Safe labels (cardinality)
 
 `SanitizingRouteResolver` collapses id-like path segments (`/users/123` →
-`/users/:id`, UUIDs → `:uuid`) for the RED middleware's `route` label. It is
-**opt-in** — the core binds the default `PathRouteResolver`, so rebind it in your
-app config (an app-layer override):
+`/users/:id`, UUIDs → `:uuid`) for the RED middleware's `route` label.
+
+The core's shipped default is `ConstantRouteResolver` — the `route` label is the
+constant `(unset)` until the application picks a resolver, because a raw path is
+attacker-controlled. This resolver is one of the opt-ins, and it narrows the
+**id** case only: arbitrary scanner paths and non-UUID tokens stay unique, so it
+neither bounds cardinality nor hides secrets in a path. Prefer the core's
+`CurrentRouteResolver` (matched router pattern) when you have a router, or wrap
+this one in `BoundedRouteResolver` to cap the series count.
+
+Rebind it in your app config (an app-layer override):
 
 ```php
 // config/common/di.php
@@ -104,6 +118,15 @@ combination.
 Recording with a label name that was **not declared** at registration throws
 `InvalidArgumentException` (a typo'd label would otherwise silently record under
 an empty value); a declared-but-missing label renders as an empty string.
+
+### Numeric input contract
+
+Recorded amounts must be finite: `inc`/`observe`/`add` and gauge `inc`/`dec`
+throw on `NAN`/`±INF`; gauge `set()` allows `±INF` but throws on `NAN`
+(promphp has no renderable NaN token). Mirrors the core contract, so the same
+code cannot behave differently per backend — and nothing non-finite reaches the
+shared, durable storage adapters, where a single unguarded `NAN` would poison
+the series total until the storage is flushed.
 
 ### Metric namespace
 

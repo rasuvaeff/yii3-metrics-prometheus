@@ -20,7 +20,7 @@ final class MetricsEndpointTest
 {
     public function rendersMetricsAsPrometheusTextPlain(): void
     {
-        $registry = new CollectorRegistry(new InMemory(), false);
+        $registry = new CollectorRegistry(new InMemory(), registerDefaultMetrics: false);
         $metrics = new MetricRegistry(new PrometheusMeterProvider($registry));
         $metrics->counter('hits_total', 'Hits')->inc();
 

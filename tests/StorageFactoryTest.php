@@ -94,6 +94,11 @@ final class StorageFactoryTest
         $factory = new StorageFactory(sapi: 'fpm-fcgi');
         $raised = null;
 
+        // Without this the report lands on the process STDERR, which pollutes the
+        // test output and breaks Infection's piped initial run.
+        $sink = tempnam(sys_get_temp_dir(), 'metrics-error-log-');
+        $previousSink = ini_set('error_log', $sink);
+
         set_error_handler(static function (int $errno, string $message) use (&$raised): bool {
             $raised = $message;
 
@@ -106,10 +111,15 @@ final class StorageFactoryTest
             $adapter = $factory->create();
         } finally {
             restore_error_handler();
+            ini_set('error_log', $previousSink === false ? '' : $previousSink);
         }
+
+        $logged = (string) file_get_contents($sink);
+        unlink($sink);
 
         Assert::instanceOf($adapter, InMemory::class);
         Assert::null($raised);
+        Assert::string($logged)->contains('per-worker');
     }
 
     #[DataProvider('noReportProvider')]

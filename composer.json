@@ -73,6 +73,9 @@
         "sort-packages": true
     },
     "extra": {
+        "branch-alias": {
+            "dev-master": "1.0.x-dev"
+        },
         "config-plugin": {
             "di": "di.php",
             "di-web": "di-web.php",

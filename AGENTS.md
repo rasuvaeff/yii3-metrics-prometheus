@@ -44,21 +44,25 @@ override, not a vendor duplicate). `ConfigWiringTest` guards this.
    increment (core contract).
 4. **Preserve the public contract.** Update README + tests with any API change.
 
-## Local build & the path-repo / publish trap
+## Local build
 
-Requires `rasuvaeff/yii3-metrics: ^1.0` — **not on Packagist yet**. Local builds
-resolve it via a `repositories` **path** entry (`/repo/yii3-metrics`), so every
-Docker command must mount the **monorepo root** as `/repo`:
+Requires `rasuvaeff/yii3-metrics: ^1.0`, which **is** on Packagist. The
+`repositories` path entry this package used before the core was released is
+gone, so the ordinary `/app` mount works and there is no monorepo-root
+requirement:
 
 ```bash
-docker run --rm -v /home/rasuvaeff/projects/rasuvaeff:/repo \
-  -w /repo/yii3-metrics-prometheus composer:2 composer build
+docker run --rm -v "$PWD":/app -w /app composer:2 composer build
 ```
 
-`make build` (which mounts `/app`) FAILS — the installed
-`vendor/rasuvaeff/yii3-metrics` symlinks to `/repo/yii3-metrics`. **Before
-publishing:** release the core to Packagist first, then remove the `repositories`
-block.
+`make build` and `bin/build-digest yii3-metrics-prometheus build` both work.
+
+Note that a local build therefore resolves the core from Packagist, **not** from
+the working copy next door. When a change depends on unreleased core behaviour,
+verify it against the core branch deliberately (a temporary path repository)
+rather than assuming the sibling directory is in play. The OTLP backend
+`yii3-metrics-otel` still carries a real path repository and does need the
+`/repo` mount.
 
 ## Invariants & gotchas
 

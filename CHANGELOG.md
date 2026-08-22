@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Behaviour change — the `in_memory`-under-php-fpm misconfiguration is no
+  longer reported with `trigger_error()`.** `StorageFactory` takes an optional
+  PSR-3 logger (new second constructor parameter, bound explicitly in
+  `config/di.php`) and logs a warning, falling back to `error_log()` when the
+  application has no logger. `yiisoft/error-handler` converts PHP warnings into
+  `ErrorException`, so the previous `E_USER_WARNING` made the shipped default
+  configuration (`storage = in_memory`, deployed on php-fpm) throw out of the DI
+  factory and turn every request that touched metrics into a 500 — the opposite
+  of the "visible warning" it was meant to be. `psr/log` moves to `require`.
+- Reject non-finite recorded amounts, matching the core contract:
+  `PrometheusCounter::inc()`, `PrometheusHistogram::observe()`,
+  `PrometheusUpDownCounter::add()` and `PrometheusGauge::inc()`/`dec()` throw
+  `InvalidArgumentException` on `NAN` and `±INF`; `PrometheusGauge::set()` still
+  accepts `±INF` (promphp renders `+Inf`/`-Inf`) but rejects `NAN`, which promphp
+  coerces to the invalid token `NAN` while raising a PHP warning. Neither promphp
+  nor the old `$amount < 0` guard stopped `NAN` (every comparison with it is
+  false), and a promphp storage adapter is shared and durable, so one poisoned
+  recording broke the series until the storage was flushed.
+- Document that the core's default `route` label is now the constant `(unset)`,
+  and what `SanitizingRouteResolver` does and does not cover.
+- Adopt `rasuvaeff/rector-named-literals` and split the CI mutation filter from
+  the general one, so documentation and workflow edits stop paying for a full
+  mutation run.
+
 ## 1.0.2 — 2026-07-25
 
 - Document the exact Composer Dependency Analyser exclusion required when this

@@ -75,8 +75,19 @@ block.
   name throws `InvalidArgumentException` — no silent `in_memory` fallback.
 - **Multiprocess storage is mandatory for php-fpm** — the `in_memory` adapter is
   per-worker, so `/metrics` would only show the serving worker; `StorageFactory`
-  raises `E_USER_WARNING` for that combination (`PHP_SAPI === 'fpm-fcgi'`). Use
-  `apcng`/`apcu`/`redis`/`predis`/`pdo`, documented in the README.
+  REPORTS that combination (`PHP_SAPI === 'fpm-fcgi'`) through its optional PSR-3
+  logger, falling back to `error_log()`. Use `apcng`/`apcu`/`redis`/`predis`/`pdo`,
+  documented in the README.
+- **Never report a misconfiguration with `trigger_error()`.** `yiisoft/error-handler`
+  converts PHP warnings into `ErrorException`, so a warning raised inside a DI
+  factory becomes a 500 on every request that touches metrics — the shipped
+  default (`in_memory` + php-fpm) did exactly that. `error_log()` bypasses the
+  error handler and is the fallback for the same reason.
+- **Recording guards must mirror the core's.** `Internal\Amount::assertFinite()`
+  on `inc`/`observe`/`add` and gauge `inc`/`dec`; `assertNotNan()` on gauge
+  `set()` (promphp renders `+Inf`/`-Inf` but coerces `NAN` to an invalid token
+  while raising a PHP warning). promphp guards neither, and its storage adapters
+  are shared and durable, so an unguarded `NAN` outlives the request.
 - **`Internal\Labels::order()` throws on an undeclared label** (typo guard) and
   renders missing declared labels as empty strings — both covered in
   `PrometheusExpositionTest`.

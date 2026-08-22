@@ -9,6 +9,9 @@ use Prometheus\RenderTextFormat;
 use Prometheus\Storage\InMemory;
 use Prometheus\Storage\PDO as PdoAdapter;
 use Prometheus\Storage\Predis;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
+use Psr\Log\LogLevel;
 use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
 use Rasuvaeff\Yii3MetricsPrometheus\StorageFactory;
 use Testo\Assert;
@@ -32,7 +35,7 @@ final class StorageFactoryTest
         Assert::instanceOf($adapter, PdoAdapter::class);
 
         // Round-trip: the adapter actually stores and renders a sample.
-        $registry = new CollectorRegistry($adapter, false);
+        $registry = new CollectorRegistry($adapter, registerDefaultMetrics: false);
         $registry->getOrRegisterCounter('', 'orders_total', 'Orders placed', ['channel'])
             ->incBy(2, ['web']);
 
@@ -44,15 +47,37 @@ final class StorageFactoryTest
     // require the ext-apcu / ext-redis extension, so they are exercised in the
     // (ext-gated) Integration suite, not here.
 
-    public function warnsAboutInMemoryUnderFpm(): void
+    public function reportsInMemoryUnderFpmToTheLogger(): void
     {
-        $factory = new StorageFactory(sapi: 'fpm-fcgi');
-        $warning = null;
-        set_error_handler(static function (int $errno, string $message) use (&$warning): bool {
-            $warning = $message;
+        $logger = $this->recordingLogger();
+        $factory = new StorageFactory(sapi: 'fpm-fcgi', logger: $logger);
 
-            return true;
-        }, E_USER_WARNING);
+        $adapter = $factory->create();
+
+        Assert::instanceOf($adapter, InMemory::class);
+        Assert::count($logger->records, 1);
+        Assert::same($logger->records[0]['level'], LogLevel::WARNING);
+        Assert::string($logger->records[0]['message'])->contains('per-worker');
+    }
+
+    /**
+     * Regression: the report used to be a `trigger_error(..., E_USER_WARNING)`.
+     * `yiisoft/error-handler` converts PHP warnings into `ErrorException`, so the
+     * shipped default configuration (`in_memory` + php-fpm) threw out of the DI
+     * factory and turned every metrics request into a 500. A misconfiguration
+     * report must never be raised as a PHP error.
+     */
+    public function reportIsNotRaisedAsAPhpError(): void
+    {
+        $factory = new StorageFactory(sapi: 'fpm-fcgi', logger: $this->recordingLogger());
+        $raised = null;
+
+        set_error_handler(static function (int $errno, string $message) use (&$raised): bool {
+            $raised = $message;
+
+            // Exactly what yiisoft/error-handler does with a warning.
+            throw new \ErrorException($message, severity: $errno);
+        });
 
         try {
             $adapter = $factory->create();
@@ -61,33 +86,64 @@ final class StorageFactoryTest
         }
 
         Assert::instanceOf($adapter, InMemory::class);
-        Assert::string((string) $warning)->contains('per-worker');
+        Assert::null($raised);
     }
 
-    #[DataProvider('noWarningProvider')]
-    public function noWarningOutsideTheFpmInMemoryCombination(string $sapi, string $adapter): void
+    public function reportFallsBackToErrorLogWithoutALogger(): void
     {
-        $factory = new StorageFactory(sapi: $sapi);
-        $warning = null;
-        set_error_handler(static function (int $errno, string $message) use (&$warning): bool {
-            $warning = $message;
+        $factory = new StorageFactory(sapi: 'fpm-fcgi');
+        $raised = null;
+
+        set_error_handler(static function (int $errno, string $message) use (&$raised): bool {
+            $raised = $message;
 
             return true;
-        }, E_USER_WARNING);
+        });
 
         try {
-            $factory->create($adapter, $adapter === StorageFactory::PDO ? ['dsn' => 'sqlite::memory:'] : []);
+            // No logger and no PSR-3 binding: error_log() must carry the report,
+            // and it must still not surface as a PHP error.
+            $adapter = $factory->create();
         } finally {
             restore_error_handler();
         }
 
-        Assert::null($warning);
+        Assert::instanceOf($adapter, InMemory::class);
+        Assert::null($raised);
     }
 
-    public static function noWarningProvider(): iterable
+    #[DataProvider('noReportProvider')]
+    public function noReportOutsideTheFpmInMemoryCombination(string $sapi, string $adapter): void
+    {
+        $logger = $this->recordingLogger();
+        $factory = new StorageFactory(sapi: $sapi, logger: $logger);
+
+        $factory->create($adapter, $adapter === StorageFactory::PDO ? ['dsn' => 'sqlite::memory:'] : []);
+
+        Assert::same($logger->records, []);
+    }
+
+    public static function noReportProvider(): iterable
     {
         yield 'cli + in_memory' => ['cli', StorageFactory::IN_MEMORY];
         yield 'fpm + pdo' => ['fpm-fcgi', StorageFactory::PDO];
+    }
+
+    /**
+     * @return LoggerInterface&object{records: list<array{level: mixed, message: string}>}
+     */
+    private function recordingLogger(): LoggerInterface
+    {
+        return new class extends AbstractLogger {
+            /** @var list<array{level: mixed, message: string}> */
+            public array $records = [];
+
+            #[\Override]
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = ['level' => $level, 'message' => (string) $message];
+            }
+        };
     }
 
     #[DataProvider('extensionAdapterProvider')]

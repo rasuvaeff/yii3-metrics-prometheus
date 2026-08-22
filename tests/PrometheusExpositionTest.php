@@ -9,6 +9,7 @@ use Prometheus\Storage\InMemory;
 use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
 use Rasuvaeff\Yii3Metrics\LabelSet;
 use Rasuvaeff\Yii3Metrics\MetricRegistry;
+use Rasuvaeff\Yii3MetricsPrometheus\Internal\Amount;
 use Rasuvaeff\Yii3MetricsPrometheus\Internal\Labels;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusCounter;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusGauge;
@@ -19,6 +20,7 @@ use Rasuvaeff\Yii3MetricsPrometheus\PrometheusRenderer;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusUpDownCounter;
 use Testo\Assert;
 use Testo\Codecov\Covers;
+use Testo\Data\DataProvider;
 use Testo\Lifecycle\BeforeTest;
 use Testo\Test;
 
@@ -31,6 +33,8 @@ use Testo\Test;
 #[Covers(PrometheusMeterProvider::class)]
 #[Covers(PrometheusRenderer::class)]
 #[Covers(Labels::class)]
+#[Covers(Amount::class)]
+#[Covers(InvalidArgumentException::class)]
 final class PrometheusExpositionTest
 {
     private CollectorRegistry $registry;
@@ -40,7 +44,7 @@ final class PrometheusExpositionTest
     public function setUp(): void
     {
         // Fresh in-memory storage per test — APC/Redis are global and would leak.
-        $this->registry = new CollectorRegistry(new InMemory(), false);
+        $this->registry = new CollectorRegistry(new InMemory(), registerDefaultMetrics: false);
         $this->metrics = new MetricRegistry(new PrometheusMeterProvider($this->registry));
     }
 
@@ -186,6 +190,101 @@ final class PrometheusExpositionTest
         $provider = new PrometheusMeterProvider($this->registry);
 
         Assert::same($provider->getMeter(), $provider->getMeter());
+    }
+
+    /**
+     * Regression: `if ($amount < 0)` is false for `NAN`, so `NAN` and `INF`
+     * reached promphp — which does not guard either. Unlike the core's in-memory
+     * instruments, a promphp adapter (APCu/Redis/PDO) is shared and durable, so a
+     * single poisoned recording survives the request and breaks `rate()` over
+     * that series until the storage is flushed.
+     *
+     * @param \Closure(MetricRegistry, float): void $record
+     */
+    #[DataProvider('nonFiniteRecordingProvider')]
+    public function recordingInstrumentsRejectNonFiniteInput(\Closure $record, float $amount): void
+    {
+        try {
+            $record($this->metrics, $amount);
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('must be finite');
+        }
+
+        // Nothing reached the storage: the guard runs before promphp is touched.
+        Assert::string($this->render())->notContains('NaN');
+    }
+
+    public static function nonFiniteRecordingProvider(): iterable
+    {
+        $instruments = [
+            'counter inc' => static fn(MetricRegistry $m, float $v): mixed => $m->counter('c_total')->inc($v),
+            'histogram observe' => static fn(MetricRegistry $m, float $v): mixed => $m->histogram('h_sec')->observe($v),
+            'up-down add' => static fn(MetricRegistry $m, float $v): mixed => $m->upDownCounter('u_val')->add($v),
+            'gauge inc' => static fn(MetricRegistry $m, float $v): mixed => $m->gauge('g_val')->inc($v),
+            'gauge dec' => static fn(MetricRegistry $m, float $v): mixed => $m->gauge('g_val')->dec($v),
+        ];
+
+        foreach ($instruments as $label => $record) {
+            yield $label . ' rejects NAN' => [$record, NAN];
+            yield $label . ' rejects +INF' => [$record, INF];
+            yield $label . ' rejects -INF' => [$record, -INF];
+        }
+    }
+
+    /**
+     * `set()` is an absolute write, so `±INF` is fine — promphp has a branch for
+     * it. `NAN` does not: it falls through to `(string) $value`, which emits the
+     * invalid token `NAN` and raises a PHP warning while coercing, so the guard
+     * has to stop it before promphp sees it.
+     */
+    public function gaugeSetRendersInfinityAndRejectsNan(): void
+    {
+        $this->metrics->gauge('g_val', 'Gauge')->set(INF);
+        Assert::string($this->render())->contains('g_val +Inf');
+
+        $this->metrics->gauge('g_val')->set(-INF);
+        Assert::string($this->render())->contains('g_val -Inf');
+
+        try {
+            $this->metrics->gauge('g_val')->set(NAN);
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('must not be NaN');
+        }
+
+        Assert::string($this->render())->notContains('NAN');
+    }
+
+    /**
+     * Label values are untrusted strings, and the exposition format delimits with
+     * `"`, `\` and newlines. promphp escapes them; this pins that contract, since
+     * an unescaped value would let a caller forge extra samples.
+     *
+     * @param non-empty-string $value
+     */
+    #[DataProvider('hostileLabelValueProvider')]
+    public function hostileLabelValuesCannotForgeExpositionLines(string $value, string $expected): void
+    {
+        $this->metrics->counter('orders_total', 'Orders', ['channel'])
+            ->inc(1.0, new LabelSet(['channel' => $value]));
+
+        $text = $this->render();
+
+        Assert::string($text)->contains('orders_total{channel="' . $expected . '"} 1');
+        // Exactly one sample line for this metric — nothing was injected.
+        Assert::count(array_filter(
+            explode("\n", $text),
+            static fn(string $line): bool => str_starts_with($line, 'orders_total{'),
+        ), 1);
+    }
+
+    public static function hostileLabelValueProvider(): iterable
+    {
+        yield 'newline' => ["web\nforged_total 999", 'web\nforged_total 999'];
+        yield 'double quote' => ['we"b', 'we\"b'];
+        yield 'backslash' => ['we\\b', 'we\\\\b'];
+        yield 'quote closing the label block' => ['a"} 1' . "\n" . 'forged 5', 'a\"} 1\nforged 5'];
     }
 
     private function render(): string

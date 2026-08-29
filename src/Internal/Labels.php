@@ -10,9 +10,10 @@ use Rasuvaeff\Yii3Metrics\LabelSet;
 /**
  * Orders a {@see LabelSet}'s values by the metric's declared label names —
  * promphp stores names in registration order and expects values positionally in
- * that order. Missing declared labels become an empty string; an UNDECLARED
- * label throws — it is a programmer error (typo'd label name), and recording it
- * silently under an empty value would corrupt the series.
+ * that order. A DECLARED label missing from the set throws, and so does an
+ * UNDECLARED one: both are programmer errors (a forgotten label, a typo'd
+ * label name), and recording either silently — the missing one as `""`, the
+ * undeclared one dropped — corrupts the series exactly the same way.
  *
  * @internal
  */
@@ -27,20 +28,28 @@ final class Labels
      */
     public static function order(LabelSet $labels, array $names): array
     {
-        $undeclared = array_diff(array_keys($labels->labels), $names);
+        $values = [];
 
-        if ($undeclared !== []) {
+        foreach ($names as $name) {
+            if (!\array_key_exists($name, $labels->labels)) {
+                throw new InvalidArgumentException(\sprintf(
+                    'Missing label "%s" for this metric; passed: "%s"',
+                    $name,
+                    implode('", "', array_keys($labels->labels)),
+                ));
+            }
+
+            $values[] = $labels->labels[$name];
+        }
+
+        if (\count($values) !== \count($labels->labels)) {
+            $undeclared = array_diff(array_keys($labels->labels), $names);
+
             throw new InvalidArgumentException(\sprintf(
                 'Undeclared label(s) "%s" for this metric; declared: "%s"',
                 implode('", "', $undeclared),
                 implode('", "', $names),
             ));
-        }
-
-        $values = [];
-
-        foreach ($names as $name) {
-            $values[] = $labels->labels[$name] ?? '';
         }
 
         return $values;

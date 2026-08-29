@@ -79,7 +79,11 @@ logger (the package DI passes it in), or to `error_log()` when there is none.
 
 `MetricsEndpoint` (PSR-15) renders the registry as Prometheus text exposition
 (`text/plain; version=0.0.4`). Route your `/metrics` path to it — it needs a
-PSR-17 `ResponseFactoryInterface`.
+PSR-17 `ResponseFactoryInterface`. The handler itself has **no access control**:
+it serves the full exposition to any request that reaches it, so restrict the
+path at your edge (see [Security](#security)). A sample whose labels no longer
+match its metric (possible with a Redis storage) is rendered as a comment
+instead of failing the whole scrape.
 
 ```php
 use Rasuvaeff\Yii3MetricsPrometheus\MetricsEndpoint;
@@ -117,7 +121,18 @@ combination.
 
 Recording with a label name that was **not declared** at registration throws
 `InvalidArgumentException` (a typo'd label would otherwise silently record under
-an empty value); a declared-but-missing label renders as an empty string.
+an empty value); so does a **declared** label missing from the recording's set —
+silently filing it as `""` merged every such observation into one empty-valued
+series, the same corruption the undeclared case is rejected for.
+
+### Histogram defaults
+
+A histogram registered without explicit buckets gets the core's
+`Buckets::PROMETHEUS_DEFAULTS` (11 bounds, 0.005 s … 10 s) — the same list on
+every backend, so bucket assertions in in-memory tests describe the production
+schema. promphp's own default layout (14 bounds) is never used. Metric names
+and bucket layouts are validated by the same core `Validation` the in-memory
+and no-op meters apply.
 
 ### Numeric input contract
 

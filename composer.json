@@ -28,7 +28,7 @@
         "psr/http-message": "^2.0",
         "psr/http-server-handler": "^1.0",
         "psr/log": "^1.1 || ^2.0 || ^3.0",
-        "rasuvaeff/yii3-metrics": "^1.0"
+        "rasuvaeff/yii3-metrics": "^2.1"
     },
     "require-dev": {
         "ergebnis/composer-normalize": "^2.51",
@@ -38,6 +38,8 @@
         "nyholm/psr7": "^1.8",
         "predis/predis": "^2.2 || ^3.0",
         "rasuvaeff/rector-named-literals": "^1.0",
+        "rasuvaeff/understudy": "^0.4",
+        "rasuvaeff/understudy-testo": "^0.1",
         "rector/rector": "^2.4",
         "roave/backward-compatibility-check": "^8.0",
         "testo/bridge-infection": "^0.1.6",

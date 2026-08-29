@@ -19,7 +19,8 @@ use Rasuvaeff\Yii3Metrics\MeterProviderInterface;
  */
 final class PrometheusMeterProvider implements MeterProviderInterface
 {
-    private ?PrometheusMeter $meter = null;
+    /** @var array<string, PrometheusMeter> keyed by instrumentation scope (`''` for none) */
+    private array $meters = [];
 
     public function __construct(
         private readonly CollectorRegistry $registry,
@@ -29,7 +30,10 @@ final class PrometheusMeterProvider implements MeterProviderInterface
     #[\Override]
     public function getMeter(?string $name = null): MeterInterface
     {
-        return $this->meter ??= new PrometheusMeter($this->registry, $this->namespace);
+        // Memoized per scope; the meters are thin wrappers, the accumulating
+        // state lives in the shared registry — two scopes still record into
+        // the same series, per the core `(kind, name)` contract.
+        return $this->meters[$name ?? ''] ??= new PrometheusMeter($this->registry, $this->namespace);
     }
 
     public function registry(): CollectorRegistry

@@ -93,8 +93,26 @@ rather than assuming the sibling directory is in play. The OTLP backend
   while raising a PHP warning). The promphp client guards neither, and its
   storage adapters are shared and durable, so an unguarded `NAN` outlives the
   request.
-- **`Internal\Labels::order()` throws on an undeclared label** (typo guard) and
-  renders missing declared labels as empty strings — both covered in
+- **`PrometheusMeter` applies the core `Internal\Validation`** (@api since core
+  2.1.0): metric-name grammar and bucket layout — promphp's own name regex
+  anchors with `$` and accepts a trailing newline the core rejects. A histogram
+  without explicit buckets materialises `Buckets::PROMETHEUS_DEFAULTS` (minus
+  the trailing `+Inf`, which promphp owns) — promphp's own 14-bound default is
+  never used, so the bucket schema matches the core and the OTel backend.
+- **`PrometheusRenderer` renders silent.** A sample whose labels no longer
+  match its metric (a Redis storage can hold such rows) becomes an `# Error:`
+  comment instead of failing the whole scrape; do not "fix" this back to the
+  throwing mode. `MetricsEndpoint` itself has no access control — the README's
+  Security section owns that contract.
+- `PrometheusMeterProvider` memoizes meters per instrumentation scope; the
+  meters are thin wrappers and the accumulating state lives in the shared
+  registry, so two scopes still record into the same series.
+- **`Internal\Labels::order()` throws on BOTH a missing declared label and an
+  undeclared one** (typo guard) — a declared label silently recorded as `""`
+  merged every such observation into one empty-valued series. The typo case
+  surfaces as `Missing label "<declared>"; passed: "<typo'd>"`. The hot path is
+  a single `array_key_exists` pass with no `array_keys`/`array_diff`
+  allocations; the `array_diff` runs only on the throw path. Covered in
   `PrometheusExpositionTest`.
 - Code: `declare(strict_types=1)`, `final readonly class`, `#[\Override]`,
   explicit types.

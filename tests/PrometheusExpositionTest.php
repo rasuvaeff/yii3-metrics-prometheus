@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace Rasuvaeff\Yii3MetricsPrometheus\Tests;
 
 use Prometheus\CollectorRegistry;
+use Prometheus\MetricFamilySamples;
+use Prometheus\Sample;
 use Prometheus\Storage\InMemory;
+use Rasuvaeff\Understudy\Understudy;
+use Rasuvaeff\Yii3Metrics\Buckets;
 use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
 use Rasuvaeff\Yii3Metrics\LabelSet;
 use Rasuvaeff\Yii3Metrics\MetricRegistry;
@@ -23,6 +27,8 @@ use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
 use Testo\Lifecycle\BeforeTest;
 use Testo\Test;
+
+use function Rasuvaeff\Understudy\when;
 
 #[Test]
 #[Covers(PrometheusMeter::class)]
@@ -164,17 +170,111 @@ final class PrometheusExpositionTest
             $counter->inc(1.0, new LabelSet(['chanel' => 'web'])); // typo'd label name
             Assert::fail('expected an InvalidArgumentException');
         } catch (InvalidArgumentException $e) {
-            Assert::string($e->getMessage())->contains('Undeclared label');
-            Assert::string($e->getMessage())->contains('chanel');
+            Assert::string($e->getMessage())->contains('Missing label "channel"');
+            Assert::string($e->getMessage())->contains('chanel'); // the typo is visible in the passed list
         }
     }
 
-    public function missingDeclaredLabelRendersEmptyValue(): void
+    public function anUndeclaredExtraLabelStillThrows(): void
     {
-        $this->metrics->counter('orders_total', 'Orders', ['channel'])
-            ->inc(1.0, new LabelSet([]));
+        $counter = $this->metrics->counter('orders_total', 'Orders', ['channel']);
 
-        Assert::string($this->render())->contains('orders_total{channel=""} 1');
+        try {
+            $counter->inc(1.0, new LabelSet(['channel' => 'web', 'extra' => 'x']));
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            // The exact message pins that only the undeclared labels are named —
+            // an unwrapped array_diff would list the declared ones too.
+            Assert::same(
+                $e->getMessage(),
+                'Undeclared label(s) "extra" for this metric; declared: "channel"',
+            );
+        }
+    }
+
+    public function missingDeclaredLabelThrows(): void
+    {
+        $counter = $this->metrics->counter('orders_total', 'Orders', ['channel']);
+
+        try {
+            $counter->inc(1.0, new LabelSet([]));
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('Missing label');
+            Assert::string($e->getMessage())->contains('channel');
+        }
+    }
+
+    public function missingLabelOfAMultiLabelMetricNamesTheLabel(): void
+    {
+        $counter = $this->metrics->counter('orders_total', 'Orders', ['channel', 'status']);
+
+        try {
+            $counter->inc(1.0, new LabelSet(['channel' => 'web']));
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('Missing label "status"');
+        }
+    }
+
+    /**
+     * The core validates metric names with a `\z` anchor; promphp's own regex
+     * anchors with `$` and lets a trailing newline through, which then breaks
+     * the `# HELP` / `# TYPE` lines of the exposition.
+     */
+    public function metricNameWithATrailingNewlineIsRejected(): void
+    {
+        foreach (['counter', 'gauge', 'upDownCounter', 'histogram'] as $kind) {
+            try {
+                match ($kind) {
+                    'counter' => $this->metrics->counter("orders_total\n"),
+                    'gauge' => $this->metrics->gauge("queue_depth\n"),
+                    'upDownCounter' => $this->metrics->upDownCounter("inflight\n"),
+                    'histogram' => $this->metrics->histogram("latency\n"),
+                };
+                Assert::fail(\sprintf('expected an InvalidArgumentException for %s', $kind));
+            } catch (InvalidArgumentException $e) {
+                Assert::string($e->getMessage())->contains('Invalid metric name');
+            }
+        }
+    }
+
+    public function nonIncreasingHistogramBoundsAreRejected(): void
+    {
+        try {
+            $this->metrics->histogram('latency', 'Latency', [], [1.0, 0.5]);
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('strictly increasing');
+        }
+    }
+
+    /**
+     * An empty bucket list used to fall through to promphp's own default — 14
+     * bounds against the core's 11 — so the identical code produced a different
+     * bucket schema in production than in the in-memory tests.
+     */
+    public function histogramWithoutBucketsUsesTheCoreDefaults(): void
+    {
+        $this->metrics->histogram('latency', 'Latency')->observe(0.02);
+
+        $rendered = $this->render();
+
+        foreach (Buckets::PROMETHEUS_DEFAULTS as $bound) {
+            Assert::string($rendered)->contains('le="' . $this->formatBound($bound) . '"');
+        }
+
+        Assert::string($rendered)->contains('le="+Inf"');
+
+        // Exactly the 11 core bounds plus the single overflow bucket: a
+        // trailing +Inf left in the list would double the overflow bucket,
+        // and promphp's own default layout carries 14 bounds.
+        Assert::same(substr_count($rendered, 'le="'), \count(Buckets::PROMETHEUS_DEFAULTS) + 1);
+    }
+
+    private function formatBound(float $bound): string
+    {
+        return rtrim(rtrim(number_format($bound, 3, '.', ''), '0'), '.');
     }
 
     public function namespacePrefixesEveryMetricName(): void
@@ -190,6 +290,57 @@ final class PrometheusExpositionTest
         $provider = new PrometheusMeterProvider($this->registry);
 
         Assert::same($provider->getMeter(), $provider->getMeter());
+    }
+
+    public function providerMemoizesMetersPerScope(): void
+    {
+        $provider = new PrometheusMeterProvider($this->registry);
+
+        $libA = $provider->getMeter('lib-a');
+        $libB = $provider->getMeter('lib-b');
+
+        Assert::same($provider->getMeter('lib-a'), $libA);
+        Assert::same($provider->getMeter('lib-b'), $libB);
+        Assert::false($libA === $libB);
+
+        // Different scopes, one series: state lives in the shared registry,
+        // per the core `(kind, name)` contract.
+        $libA->counter('scoped_total', 'Scoped')->inc();
+        $libB->counter('scoped_total', 'Scoped')->inc();
+
+        Assert::string($this->render())->contains('scoped_total 2');
+    }
+
+    /**
+     * A Redis storage can hold samples whose labels no longer match the
+     * registered metric. Without silent mode one such row turned the whole
+     * scrape into a 500 until the storage was flushed — degrading to a comment
+     * keeps every other series visible.
+     */
+    public function aBrokenSampleIsRenderedAsACommentInsteadOfFailingTheScrape(): void
+    {
+        $registry = Understudy::for(CollectorRegistry::class);
+        when(fn() => $registry->getMetricFamilySamples())->returns([
+            new MetricFamilySamples([
+                'name' => 'broken_total',
+                'type' => 'counter',
+                'help' => 'Broken',
+                'labelNames' => ['a'],
+                'samples' => [
+                    [
+                        'name' => 'broken_total',
+                        'labelNames' => ['a', 'b'],
+                        'labelValues' => ['x'],
+                        'value' => 1,
+                    ],
+                ],
+            ]),
+        ]);
+
+        $rendered = (new PrometheusRenderer())->render($registry);
+
+        Assert::string($rendered)->contains('# HELP broken_total Broken');
+        Assert::string($rendered)->contains('# Error:');
     }
 
     /**

@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.0 — 2026-08-29
+
+- **BREAKING.** Requires `rasuvaeff/yii3-metrics` ^2.1 — the backend now applies
+  the core's `Internal\Validation` (stable API as of core 2.1.0) to every
+  instrument registration, so a bad metric name or bucket layout fails here
+  exactly as it does in the core meters. Core 1.x stays served by this package's
+  1.x line.
+- **BREAKING.** A declared-but-missing label now throws
+  `InvalidArgumentException` instead of silently recording an empty value —
+  every such observation used to merge into one `label=""` series, the same
+  class of corruption the undeclared case is rejected for. The typo'd-label
+  message now names the missing declared label and the passed labels. The hot
+  path no longer allocates `array_keys` + `array_diff` per recording (#17).
+- Histograms registered without explicit buckets now use the core's
+  `Buckets::PROMETHEUS_DEFAULTS` (11 bounds) instead of promphp's own default
+  layout (14 bounds) — the same code no longer produces a different bucket
+  schema in tests and in production (#17, rasuvaeff/yii3-metrics#24).
+- `PrometheusRenderer` renders in promphp's silent mode: a sample whose labels
+  no longer match its metric (possible with a Redis storage) becomes a comment
+  instead of turning the whole `/metrics` scrape into a 500 (#17).
+- `PrometheusMeterProvider::getMeter()` memoizes per instrumentation scope —
+  `getMeter('lib-a')` and `getMeter('lib-b')` no longer return the same meter.
+  State stays global per `(kind, name)`: both scopes record into the shared
+  registry (#17).
+
 ## 1.1.0 — 2026-08-22
 
 - **Behaviour change — the `in_memory`-under-php-fpm misconfiguration is no

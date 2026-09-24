@@ -238,6 +238,19 @@ final class StorageFactoryTest
 
         $property = new \ReflectionProperty(AbstractRedis::class, 'prefix');
         Assert::same($property->getValue(), 'checkout:PROMETHEUS_');
+
+        $adapter = (new StorageFactory())->create(StorageFactory::PREDIS, [
+            'prefix' => 123,
+            'host' => '127.0.0.1',
+        ]);
+        $clientProperty = new \ReflectionProperty(Predis::class, 'redis');
+        $clientProperty->setAccessible(true);
+        $client = $clientProperty->getValue($adapter);
+        $innerProperty = new \ReflectionProperty($client, 'client');
+        $innerProperty->setAccessible(true);
+        $innerClient = $innerProperty->getValue($client);
+        Assert::same($innerClient->getOptions()->prefix->getPrefix(), '');
+        Assert::null($innerClient->getConnection()->getParameters()->prefix);
     }
 
     #[DataProvider('invalidProvider')]

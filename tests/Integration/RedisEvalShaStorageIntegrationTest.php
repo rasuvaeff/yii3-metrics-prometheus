@@ -17,8 +17,11 @@ use Testo\Test;
 /**
  * Real round-trips through the opt-in EVALSHA adapters for both Redis client
  * libraries, including recovery after Redis loses its server-side script cache
- * (restart or SCRIPT FLUSH). Requires REDIS_HOST; the redis case additionally
- * requires ext-redis.
+ * (restart or SCRIPT FLUSH). Besides the rendered values, the test reads
+ * `INFO commandstats` deltas to prove the writes really address the scripts by
+ * SHA-1 (`cmdstat_evalsha`) and that a lost script cache falls back to plain
+ * `EVAL` (`cmdstat_eval`) instead of dropping writes. Requires REDIS_HOST; the
+ * redis case additionally requires ext-redis.
  */
 #[Test]
 #[CoversNothing]
@@ -38,6 +41,11 @@ final class RedisEvalShaStorageIntegrationTest
 
         $port = (int) (getenv('REDIS_PORT') ?: 6379);
 
+        $evalShaCalls = fn(): int => $this->commandCalls($adapter, $host, $port, 'evalsha');
+        $evalCalls = fn(): int => $this->commandCalls($adapter, $host, $port, 'eval');
+
+        $evalShaBefore = $evalShaCalls();
+
         $storage = (new StorageFactory())->create($adapter, [
             'evalsha' => true,
             'host' => $host,
@@ -53,6 +61,11 @@ final class RedisEvalShaStorageIntegrationTest
 
         Assert::string((new PrometheusRenderer())->render($registry))->contains('redis_evalsha_probe_total 2');
 
+        $evalShaMid = $evalShaCalls();
+        $evalMid = $evalCalls();
+
+        Assert::true($evalShaMid > $evalShaBefore, 'expected EVALSHA commands on the wire');
+
         // A restart or SCRIPT FLUSH empties the server-side script cache while
         // the adapter keeps writing by SHA. It must recover through the
         // NOSCRIPT fallback (plain EVAL) — including phpredis, which reports
@@ -63,6 +76,9 @@ final class RedisEvalShaStorageIntegrationTest
         $metrics->counter('redis_evalsha_probe_total')->inc();
 
         Assert::string((new PrometheusRenderer())->render($registry))->contains('redis_evalsha_probe_total 4');
+
+        Assert::true($evalCalls() > $evalMid, 'expected an EVAL fallback after the script cache was flushed');
+        Assert::true($evalShaCalls() > $evalShaMid, 'expected EVALSHA writes to resume after the fallback');
 
         $storage->wipeStorage();
     }
@@ -86,5 +102,47 @@ final class RedisEvalShaStorageIntegrationTest
 
         $client = new \Predis\Client(['host' => $host, 'port' => $port]);
         $client->script('flush');
+    }
+
+    /**
+     * Cumulative `calls` of a Redis command from `INFO commandstats`. Predis
+     * wraps the section in a `Commandstats` key and keeps the raw
+     * `calls=N,usec=...` strings, phpredis returns the entries flat (parsed
+     * into arrays) — both shapes are handled.
+     */
+    private function commandCalls(string $adapter, string $host, int $port, string $command): int
+    {
+        if ($adapter === StorageFactory::REDIS) {
+            $redis = new \Redis();
+            $redis->connect($host, $port);
+            /** @var array<string, mixed> $info */
+            $info = $redis->info('commandstats');
+        } else {
+            $client = new \Predis\Client(['host' => $host, 'port' => $port]);
+            /** @var array<string, mixed> $info */
+            $info = $client->info('commandstats');
+        }
+
+        $key = 'cmdstat_' . $command;
+        $entry = $info[$key] ?? null;
+        if ($entry === null) {
+            foreach ($info as $value) {
+                if (is_array($value) && array_key_exists($key, $value)) {
+                    $entry = $value[$key];
+
+                    break;
+                }
+            }
+        }
+
+        if (is_array($entry)) {
+            return (int) ($entry['calls'] ?? 0);
+        }
+
+        if (is_string($entry) && preg_match('/(?:^|,)calls=(\d+)/', $entry, $matches) === 1) {
+            return (int) $matches[1];
+        }
+
+        return 0;
     }
 }

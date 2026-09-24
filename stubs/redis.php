@@ -7,7 +7,7 @@ final class Redis
 {
     public function __construct() {}
 
-    public function getLastError(): string|null {}
+    public function getLastError(): ?string {}
 
     public function clearLastError(): bool {}
 

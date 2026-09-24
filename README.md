@@ -57,6 +57,11 @@ use Rasuvaeff\Yii3MetricsPrometheus\StorageFactory;
 $adapter = (new StorageFactory())->create('apcng');
 // pure-PHP Redis client (no ext-redis):
 $adapter = (new StorageFactory())->create('predis', ['host' => 'redis', 'port' => 6379]);
+$adapter = (new StorageFactory())->create('redis', [
+    'host' => 'redis', 'persistent_connections' => true,
+    'timeout' => 0.2, 'read_timeout' => 0.5,
+    'database' => 2, 'prefix' => 'checkout:PROMETHEUS_',
+]);
 // or, without apcu/redis (MySQL, PostgreSQL, SQLite):
 $adapter = (new StorageFactory())->create('pdo', [
     'dsn' => 'mysql:host=db;dbname=app',
@@ -90,6 +95,9 @@ use Rasuvaeff\Yii3MetricsPrometheus\MetricsEndpoint;
 
 $endpoint = new MetricsEndpoint($collectorRegistry, $responseFactory);
 ```
+
+If storage cannot be read, the endpoint returns `503` with the plain text body
+`metrics storage unavailable`. Protect the endpoint at the edge.
 
 ### Safe labels (cardinality)
 
@@ -147,6 +155,11 @@ the series total until the storage is flushed.
 
 Set `PROMETHEUS_NAMESPACE` (params `namespace`) to prefix every metric:
 `checkout_http_server_requests_total`. Empty by default.
+
+For Redis and Predis, pass `storage_options.prefix` to set promphp's
+process-global metric prefix before adapter creation. Use a distinct prefix per
+application sharing Redis; short timeouts and persistent connections are
+recommended for metrics.
 
 ### Classes
 

@@ -6,6 +6,7 @@ namespace Rasuvaeff\Yii3MetricsPrometheus\Tests;
 
 use Prometheus\CollectorRegistry;
 use Prometheus\RenderTextFormat;
+use Prometheus\Storage\AbstractRedis;
 use Prometheus\Storage\InMemory;
 use Prometheus\Storage\PDO as PdoAdapter;
 use Prometheus\Storage\Predis;
@@ -226,6 +227,17 @@ final class StorageFactoryTest
         $adapter = (new StorageFactory())->create(StorageFactory::PREDIS, ['host' => '127.0.0.1']);
 
         Assert::instanceOf($adapter, Predis::class);
+    }
+
+    public function appliesRedisPrefixBeforeBuildingTheAdapter(): void
+    {
+        (new StorageFactory())->create(StorageFactory::PREDIS, [
+            'prefix' => 'checkout:PROMETHEUS_',
+            'host' => '127.0.0.1',
+        ]);
+
+        $property = new \ReflectionProperty(AbstractRedis::class, 'prefix');
+        Assert::same($property->getValue(), 'checkout:PROMETHEUS_');
     }
 
     #[DataProvider('invalidProvider')]

@@ -48,6 +48,8 @@ final readonly class StorageFactory
 
     private const string FPM_SAPI = 'fpm-fcgi';
 
+    private const string DEFAULT_PREFIX = 'PROMETHEUS_';
+
     /**
      * @param string $sapi injectable for tests only; the fpm report keys off it
      * @param LoggerInterface|null $logger optional sink for the misconfiguration report; `error_log()` is used without one
@@ -68,12 +70,15 @@ final readonly class StorageFactory
             );
         }
 
+        $prefix = isset($options['prefix']) ? (string) $options['prefix'] : self::DEFAULT_PREFIX;
+        $redisOptions = array_diff_key($options, ['prefix' => true]);
+
         return match ($adapter) {
             self::IN_MEMORY => new InMemory(),
             self::APCU, 'apc' => new APC(),
             self::APCNG => new APCng(),
-            self::REDIS => new Redis($options),
-            self::PREDIS => new Predis($options),
+            self::REDIS => $this->redis($redisOptions, $prefix),
+            self::PREDIS => $this->predis($redisOptions, $prefix),
             self::PDO => $this->pdo($options),
             default => throw new InvalidArgumentException(\sprintf('Unknown storage adapter "%s"', $adapter)),
         };
@@ -139,5 +144,21 @@ final readonly class StorageFactory
             database: $connection,
             prefix: $config['prefix'],
         );
+    }
+
+    /** @param array<string, mixed> $options */
+    private function redis(array $options, string $prefix): Redis
+    {
+        Redis::setPrefix($prefix);
+
+        return new Redis($options);
+    }
+
+    /** @param array<string, mixed> $options */
+    private function predis(array $options, string $prefix): Predis
+    {
+        Redis::setPrefix($prefix);
+
+        return new Predis($options);
     }
 }

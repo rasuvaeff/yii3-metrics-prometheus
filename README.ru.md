@@ -57,6 +57,11 @@ use Rasuvaeff\Yii3MetricsPrometheus\StorageFactory;
 $adapter = (new StorageFactory())->create('apcng');
 // pure-PHP Redis client (no ext-redis):
 $adapter = (new StorageFactory())->create('predis', ['host' => 'redis', 'port' => 6379]);
+$adapter = (new StorageFactory())->create('redis', [
+    'host' => 'redis', 'persistent_connections' => true,
+    'timeout' => 0.2, 'read_timeout' => 0.5,
+    'database' => 2, 'prefix' => 'checkout:PROMETHEUS_',
+]);
 // or, without apcu/redis (MySQL, PostgreSQL, SQLite):
 $adapter = (new StorageFactory())->create('pdo', [
     'dsn' => 'mysql:host=db;dbname=app',
@@ -90,6 +95,9 @@ use Rasuvaeff\Yii3MetricsPrometheus\MetricsEndpoint;
 
 $endpoint = new MetricsEndpoint($collectorRegistry, $responseFactory);
 ```
+
+Если storage недоступен, endpoint возвращает `503` с текстом
+`metrics storage unavailable`. Закройте endpoint на edge.
 
 ### Безопасные лейблы (кардинальность)
 
@@ -148,6 +156,11 @@ return [
 
 Установите `PROMETHEUS_NAMESPACE` (params `namespace`), чтобы префиксировать
 каждую метрику: `checkout_http_server_requests_total`. По умолчанию пусто.
+
+Для Redis и Predis передайте `storage_options.prefix`, чтобы задать
+process-global префикс метрик promphp до создания adapter. Для разных
+приложений в одном Redis нужны разные префиксы; для metrics рекомендуются
+короткие timeout и persistent connections.
 
 ### Классы
 

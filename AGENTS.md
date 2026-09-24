@@ -122,9 +122,16 @@ rather than assuming the sibling directory is in play. The OTLP backend
 - `examples/` is part of the public contract: keep scripts runnable.
 - `StorageFactory` keeps the historical promphp adapters by default. The
   `evalsha: true` option is opt-in for `redis`/`predis`; it preserves promphp's
-  key schema and falls back to `EVAL` after `NOSCRIPT` (Redis restart or
-  `SCRIPT FLUSH`). It reduces script payload size but does not reduce the
-  number of round trips; buffered/pipelined writes require a separate API.
+  key schema and sends writes as optimistic `EVALSHA` (SHA-1 computed locally —
+  no `SCRIPT LOAD`, no per-instance state, so the saving applies per request
+  even under php-fpm). A `NOSCRIPT` reply (Redis restart, `SCRIPT FLUSH`) falls
+  back to `EVAL` — phpredis reports that reply via `false` + `getLastError()`
+  instead of an exception, so `PhpRedisEvalShaClient::evalSha()` must key off
+  `getLastError()`, never off a thrown error. Connection handling is delegated
+  to promphp's own `PHPRedis`/`Predis` clients; our copies of their defaults
+  are pinned to the vendor values by `EvalShaPromphpDefaultsTest`. The mode
+  reduces script payload size but does not reduce the number of round trips;
+  buffered/pipelined writes require a separate API.
 
 ## When you finish
 

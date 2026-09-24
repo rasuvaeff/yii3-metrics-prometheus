@@ -207,7 +207,7 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
-          extensions: mbstring, json, pdo_sqlite
+          extensions: mbstring, json, pdo_sqlite, redis
           tools: composer:v2
 
       - name: Install dependencies

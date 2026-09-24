@@ -62,7 +62,7 @@ $adapter = (new StorageFactory())->create('redis', [
     'timeout' => 0.2, 'read_timeout' => 0.5,
     'database' => 2, 'prefix' => 'checkout:PROMETHEUS_',
 ]);
-// opt-in EVALSHA: scripts are loaded once per client; NOSCRIPT falls back to EVAL
+// opt-in EVALSHA: writes address Lua scripts by SHA-1, plain EVAL after NOSCRIPT
 $adapter = (new StorageFactory())->create('predis', [
     'host' => 'redis', 'evalsha' => true,
 ]);
@@ -73,6 +73,21 @@ $adapter = (new StorageFactory())->create('pdo', [
     'password' => getenv('DB_PASSWORD'),
 ]);
 ```
+
+**What `evalsha: true` saves.** Each Redis write normally carries the full Lua
+script body (several hundred bytes). With `evalsha` the write addresses the
+script by its SHA-1, so only the JSON metadata and label values stay on the
+wire — they are still sent on every write, and the number of round trips is
+unchanged (one per write): the win is payload size, not latency. The script is
+looked up optimistically — no `SCRIPT LOAD` round trip and no client-side
+state — so the saving applies from the first write after Redis's script cache
+is warm, in php-fpm workers and long-running processes alike, and the mode
+keeps working where the `SCRIPT` command is disabled by ACL. A `NOSCRIPT`
+reply (cold cache, Redis restart, `SCRIPT FLUSH`) transparently falls back to
+plain `EVAL` for that write. Latency wins come from buffered writes
+([#25](https://github.com/rasuvaeff/yii3-metrics-prometheus/issues/25), not
+implemented yet). `evalsha` accepts the usual boolean spellings (`true`/`false`,
+`1`/`0`, `"yes"`/`"no"`, `"on"`/`"off"`).
 
 An unknown adapter name throws (no silent fallback), and selecting `in_memory`
 under php-fpm is **reported** — a scrape that silently shows one worker's

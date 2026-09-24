@@ -2,9 +2,8 @@
     "symbol-whitelist": [
         "PDO",
         "Predis\\Client",
-        "Predis\\Connection\\ConnectionException",
-        "Redis",
-        "RedisException"
+        "Predis\\Response\\ServerException",
+        "Redis"
     ],
     "php-core-extensions": [
         "Core",

@@ -11,28 +11,37 @@ use Rasuvaeff\Yii3MetricsPrometheus\PrometheusRenderer;
 use Rasuvaeff\Yii3MetricsPrometheus\StorageFactory;
 use Testo\Assert;
 use Testo\Codecov\CoversNothing;
+use Testo\Data\DataProvider;
 use Testo\Test;
 
 /**
- * Real round-trip through the opt-in EVALSHA Predis adapter.
- *
- * Run with REDIS_HOST and a reachable Redis server.
+ * Real round-trips through the opt-in EVALSHA adapters for both Redis client
+ * libraries, including recovery after Redis loses its server-side script cache
+ * (restart or SCRIPT FLUSH). Requires REDIS_HOST; the redis case additionally
+ * requires ext-redis.
  */
 #[Test]
 #[CoversNothing]
 final class RedisEvalShaStorageIntegrationTest
 {
-    public function recordsAndRendersViaEvalShaStorage(): void
+    #[DataProvider('adapterProvider')]
+    public function recordsAndRendersAndRecoversAfterScriptFlush(string $adapter): void
     {
         $host = getenv('REDIS_HOST');
         if (!is_string($host) || $host === '') {
             return;
         }
 
-        $storage = (new StorageFactory())->create(StorageFactory::PREDIS, [
+        if ($adapter === StorageFactory::REDIS && !extension_loaded('redis')) {
+            return;
+        }
+
+        $port = (int) (getenv('REDIS_PORT') ?: 6379);
+
+        $storage = (new StorageFactory())->create($adapter, [
             'evalsha' => true,
             'host' => $host,
-            'port' => (int) (getenv('REDIS_PORT') ?: 6379),
+            'port' => $port,
             'prefix' => 'yii3_metrics_evalsha_',
         ]);
         $storage->wipeStorage();
@@ -44,18 +53,38 @@ final class RedisEvalShaStorageIntegrationTest
 
         Assert::string((new PrometheusRenderer())->render($registry))->contains('redis_evalsha_probe_total 2');
 
-        // Redis restarts and SCRIPT FLUSH invalidate the server-side cache while
-        // the PHP client still remembers the SHA. The adapter must recover with
-        // EVAL for this write and cache the script again afterwards.
-        $client = new \Predis\Client([
-            'host' => $host,
-            'port' => (int) (getenv('REDIS_PORT') ?: 6379),
-        ]);
-        $client->script('flush');
+        // A restart or SCRIPT FLUSH empties the server-side script cache while
+        // the adapter keeps writing by SHA. It must recover through the
+        // NOSCRIPT fallback (plain EVAL) — including phpredis, which reports
+        // the error reply via false + getLastError() instead of an exception.
+        $this->flushScripts($adapter, $host, $port);
+
+        $metrics->counter('redis_evalsha_probe_total')->inc();
         $metrics->counter('redis_evalsha_probe_total')->inc();
 
-        Assert::string((new PrometheusRenderer())->render($registry))->contains('redis_evalsha_probe_total 3');
+        Assert::string((new PrometheusRenderer())->render($registry))->contains('redis_evalsha_probe_total 4');
 
         $storage->wipeStorage();
+    }
+
+    public static function adapterProvider(): iterable
+    {
+        yield 'predis' => [StorageFactory::PREDIS];
+
+        yield 'redis' => [StorageFactory::REDIS];
+    }
+
+    private function flushScripts(string $adapter, string $host, int $port): void
+    {
+        if ($adapter === StorageFactory::REDIS) {
+            $redis = new \Redis();
+            $redis->connect($host, $port);
+            $redis->script('flush');
+
+            return;
+        }
+
+        $client = new \Predis\Client(['host' => $host, 'port' => $port]);
+        $client->script('flush');
     }
 }

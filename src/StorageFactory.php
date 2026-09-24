@@ -85,7 +85,7 @@ final readonly class StorageFactory
                 ? EvalShaRedis::redis($redisOptions, $prefix)
                 : $this->redis($redisOptions, $prefix),
             self::PREDIS => $evalSha
-                ? EvalShaRedis::predis($redisOptions, [], $prefix)
+                ? EvalShaRedis::predis($redisOptions, $prefix)
                 : $this->predis($redisOptions, $prefix),
             self::PDO => $this->pdo($options),
             default => throw new InvalidArgumentException(\sprintf('Unknown storage adapter "%s"', $adapter)),

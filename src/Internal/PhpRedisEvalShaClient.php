@@ -4,148 +4,72 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\Yii3MetricsPrometheus\Internal;
 
-use Prometheus\Exception\StorageException;
+use Prometheus\Storage\RedisClients\PHPRedis;
 use Prometheus\Storage\RedisClients\RedisClientException;
 
-/** @internal */
+/**
+ * phpredis does not throw on Redis error replies: the command returns false
+ * and the message lands in getLastError(). EVALSHA failure detection therefore
+ * keys off getLastError() — a NOSCRIPT reply falls back to EVAL, any other
+ * error is thrown so fail-open consumers can see it.
+ *
+ * @internal
+ */
 final class PhpRedisEvalShaClient extends AbstractEvalShaClient
 {
-    private bool $connectionInitialized = false;
+    /**
+     * Mirrors promphp's Redis adapter defaults; pinned to the vendor values by
+     * EvalShaPromphpDefaultsTest.
+     */
+    private const array DEFAULT_OPTIONS = [
+        'host' => '127.0.0.1',
+        'port' => 6379,
+        'timeout' => 0.1,
+        'read_timeout' => '10',
+        'persistent_connections' => false,
+        'password' => null,
+        'user' => null,
+    ];
 
     private readonly \Redis $redis;
 
-    /** @param array<string, mixed> $options */
-    public function __construct(private readonly array $options)
+    /**
+     * @param array<string, mixed> $options
+     */
+    public function __construct(array $options)
     {
         $this->redis = new \Redis();
+
+        parent::__construct(new PHPRedis($this->redis, array_merge(self::DEFAULT_OPTIONS, $options)));
     }
 
+    /**
+     * @param mixed[] $args
+     */
     #[\Override]
-    public function getPrefix(): ?string
+    protected function evalSha(string $sha, array $args, int $num_keys): bool
     {
-        /** @var string|null $prefix */
-        $prefix = $this->redis->getOption(\Redis::OPT_PREFIX);
-
-        return is_string($prefix) && $prefix !== '' ? $prefix : null;
-    }
-
-    #[\Override]
-    public function set(string $key, mixed $value, mixed $options = null): bool
-    {
-        return $this->redis->set($key, $value, $options);
-    }
-
-    #[\Override]
-    public function setNx(string $key, mixed $value): void
-    {
-        $this->redis->setNx($key, $value); // @phpstan-ignore-line
-    }
-
-    #[\Override]
-    public function sMembers(string $key): array
-    {
-        /** @var list<string> $members */
-        $members = $this->redis->sMembers($key);
-
-        return $members;
-    }
-
-    #[\Override]
-    public function hGetAll(string $key): array|false
-    {
-        /** @var array<string, string>|false $values */
-        $values = $this->redis->hGetAll($key);
-
-        return $values;
-    }
-
-    #[\Override]
-    public function keys(string $pattern): array
-    {
-        /** @var list<string> $keys */
-        $keys = $this->redis->keys($pattern);
-
-        return $keys;
-    }
-
-    #[\Override]
-    public function get(string $key): string|false
-    {
-        return $this->redis->get($key);
-    }
-
-    #[\Override]
-    public function del(array|string $key, string ...$other_keys): void
-    {
-        try {
-            $this->redis->del($key, ...$other_keys);
-        } catch (\RedisException $exception) {
-            throw new RedisClientException($exception->getMessage(), $exception->getCode(), $exception);
-        }
-    }
-
-    #[\Override]
-    public function ensureOpenConnection(): void
-    {
-        if ($this->connectionInitialized) {
-            return;
-        }
-
-        try {
-            $persistent = (bool) ($this->options['persistent_connections'] ?? false);
-            $connected = $persistent
-                ? $this->redis->pconnect(
-                    (string) ($this->options['host'] ?? '127.0.0.1'),
-                    (int) ($this->options['port'] ?? 6379),
-                    (float) ($this->options['timeout'] ?? 0.1),
-                )
-                : $this->redis->connect(
-                    (string) ($this->options['host'] ?? '127.0.0.1'),
-                    (int) ($this->options['port'] ?? 6379),
-                    (float) ($this->options['timeout'] ?? 0.1),
-                );
-
-            if (!$connected) {
-                throw new StorageException("Can't connect to Redis server. {$this->redis->getLastError()}");
-            }
-
-            $authParams = [];
-            if (isset($this->options['user']) && $this->options['user'] !== '') {
-                $authParams[] = (string) $this->options['user'];
-            }
-            if (isset($this->options['password'])) {
-                $authParams[] = (string) $this->options['password'];
-            }
-            if ($authParams !== []) {
-                $this->redis->auth($authParams);
-            }
-
-            if (isset($this->options['database'])) {
-                $this->redis->select((int) $this->options['database']);
-            }
-
-            $this->redis->setOption(\Redis::OPT_READ_TIMEOUT, $this->options['read_timeout'] ?? 10);
-            $this->connectionInitialized = true;
-        } catch (\RedisException $exception) {
-            throw new StorageException("Can't connect to Redis server. {$exception->getMessage()}", $exception->getCode(), $exception);
-        }
-    }
-
-    #[\Override]
-    protected function scriptLoad(string $script): void
-    {
-        $this->redis->script('load', $script);
-    }
-
-    #[\Override]
-    protected function evalSha(string $sha, array $args, int $num_keys): void
-    {
+        $this->redis->clearLastError();
         $this->redis->evalSha($sha, $args, $num_keys);
+
+        return self::classifyLastError($this->redis->getLastError());
     }
 
-    #[\Override]
-    protected function rawEval(string $script, array $args, int $num_keys): void
+    /**
+     * Classifies the phpredis lastError after an EVALSHA call: null/'' means
+     * the script ran, a NOSCRIPT prefix means the server-side script cache
+     * missed, anything else is a real failure.
+     */
+    public static function classifyLastError(?string $error): bool
     {
-        $this->redis->eval($script, $args, $num_keys);
+        if ($error === null || $error === '') {
+            return true;
+        }
+
+        if (self::isNoScript($error)) {
+            return false;
+        }
+
+        throw new RedisClientException($error);
     }
 }

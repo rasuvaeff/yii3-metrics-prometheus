@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-- Add opt-in Redis/Predis `evalsha` storage mode: Lua scripts are loaded once per
-  client, writes use `EVALSHA`, and Redis `NOSCRIPT` responses fall back to `EVAL`.
+- Add opt-in Redis/Predis `evalsha` storage mode: writes address the Lua
+  scripts by SHA-1 (`EVALSHA`, computed locally — no `SCRIPT LOAD`, no
+  client-side state) and fall back to plain `EVAL` after a Redis `NOSCRIPT`
+  reply (cold script cache, restart, `SCRIPT FLUSH`); for phpredis the reply
+  is detected through `getLastError()`, other errors are thrown. Connection
+  handling is delegated to promphp's own Redis clients.
 
 ## 2.1.0 — 2026-09-24
 

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Add opt-in Redis/Predis `evalsha` storage mode: Lua scripts are loaded once per
+  client, writes use `EVALSHA`, and Redis `NOSCRIPT` responses fall back to `EVAL`.
+
 ## 2.1.0 — 2026-09-24
 
 - Add `storage_options.prefix` for Redis and Predis storage.

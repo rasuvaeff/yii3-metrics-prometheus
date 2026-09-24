@@ -4,6 +4,10 @@
     findUnusedCode="false"
     resolveFromConfigFile="true"
 >
+    <stubs>
+        <file name="stubs/predis.php"/>
+        <file name="stubs/redis.php"/>
+    </stubs>
     <projectFiles>
         <directory name="src"/>
         <ignoreFiles>

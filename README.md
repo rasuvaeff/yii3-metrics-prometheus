@@ -62,6 +62,10 @@ $adapter = (new StorageFactory())->create('redis', [
     'timeout' => 0.2, 'read_timeout' => 0.5,
     'database' => 2, 'prefix' => 'checkout:PROMETHEUS_',
 ]);
+// opt-in EVALSHA: scripts are loaded once per client; NOSCRIPT falls back to EVAL
+$adapter = (new StorageFactory())->create('predis', [
+    'host' => 'redis', 'evalsha' => true,
+]);
 // or, without apcu/redis (MySQL, PostgreSQL, SQLite):
 $adapter = (new StorageFactory())->create('pdo', [
     'dsn' => 'mysql:host=db;dbname=app',

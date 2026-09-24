@@ -120,6 +120,11 @@ rather than assuming the sibling directory is in play. The OTLP backend
   `permissions: { contents: read }`, `persist-credentials: false`. Verify with
   `zizmor --persona=auditor .github/`.
 - `examples/` is part of the public contract: keep scripts runnable.
+- `StorageFactory` keeps the historical promphp adapters by default. The
+  `evalsha: true` option is opt-in for `redis`/`predis`; it preserves promphp's
+  key schema and falls back to `EVAL` after `NOSCRIPT` (Redis restart or
+  `SCRIPT FLUSH`). It reduces script payload size but does not reduce the
+  number of round trips; buffered/pipelined writes require a separate API.
 
 ## When you finish
 

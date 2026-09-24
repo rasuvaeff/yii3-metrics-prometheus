@@ -1,10 +1,15 @@
 {
     "symbol-whitelist": [
-        "PDO"
+        "PDO",
+        "Predis\\Client",
+        "Predis\\Connection\\ConnectionException",
+        "Redis",
+        "RedisException"
     ],
     "php-core-extensions": [
         "Core",
         "date",
+        "filter",
         "json",
         "hash",
         "pcre",

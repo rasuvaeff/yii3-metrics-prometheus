@@ -14,6 +14,7 @@ use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
+use Rasuvaeff\Yii3MetricsPrometheus\EvalShaRedis;
 use Rasuvaeff\Yii3MetricsPrometheus\StorageFactory;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -229,6 +230,26 @@ final class StorageFactoryTest
         Assert::instanceOf($adapter, Predis::class);
     }
 
+    public function createsEvalShaPredisAdapterWhenOptedIn(): void
+    {
+        $adapter = (new StorageFactory())->create(StorageFactory::PREDIS, [
+            'evalsha' => true,
+            'host' => '127.0.0.1',
+        ]);
+
+        Assert::instanceOf($adapter, EvalShaRedis::class);
+    }
+
+    public function evalShaOptionTreatsZeroStringAsDisabled(): void
+    {
+        $adapter = (new StorageFactory())->create(StorageFactory::PREDIS, [
+            'evalsha' => '0',
+            'host' => '127.0.0.1',
+        ]);
+
+        Assert::instanceOf($adapter, Predis::class);
+    }
+
     public function appliesRedisPrefixBeforeBuildingTheAdapter(): void
     {
         (new StorageFactory())->create(StorageFactory::PREDIS, [
@@ -244,10 +265,8 @@ final class StorageFactoryTest
             'host' => '127.0.0.1',
         ]);
         $clientProperty = new \ReflectionProperty(Predis::class, 'redis');
-        $clientProperty->setAccessible(true);
         $client = $clientProperty->getValue($adapter);
         $innerProperty = new \ReflectionProperty($client, 'client');
-        $innerProperty->setAccessible(true);
         $innerClient = $innerProperty->getValue($client);
         Assert::same($innerClient->getOptions()->prefix->getPrefix(), '');
         Assert::null($innerClient->getConnection()->getParameters()->prefix);

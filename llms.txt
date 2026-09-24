@@ -47,6 +47,7 @@ use Rasuvaeff\Yii3Metrics\MetricRegistry;
 use Rasuvaeff\Yii3MetricsPrometheus\{PrometheusMeterProvider, StorageFactory};
 
 $storage  = (new StorageFactory())->create('apcng');       // 'in_memory' | 'apcu' | 'apcng' | 'redis' | 'predis' | 'pdo'
+$storage  = (new StorageFactory())->create('redis', ['prefix' => 'app:PROMETHEUS_', 'timeout' => 0.2]);
 // pdo: (new StorageFactory())->create('pdo', ['dsn' => 'mysql:host=db;dbname=app',
 //   'username' => ..., 'password' => ..., 'prefix' => 'prometheus_']); unknown adapter throws
 $registry = new CollectorRegistry($storage, false);        // false = no default metrics
@@ -63,6 +64,7 @@ use Rasuvaeff\Yii3MetricsPrometheus\{MetricsEndpoint, PrometheusRenderer};
 
 $endpoint = new MetricsEndpoint($collectorRegistry, $psr17ResponseFactory);
 // Content-Type: text/plain; version=0.0.4
+// storage failure: 503 text/plain "metrics storage unavailable"
 
 echo (new PrometheusRenderer())->render($collectorRegistry); // raw exposition
 ```

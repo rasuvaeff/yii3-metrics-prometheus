@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Add `storage_options.prefix` for Redis and Predis storage.
+- Return `503 metrics storage unavailable` when `/metrics` cannot read storage.
+
 ## 2.0.0 — 2026-08-29
 
 - **BREAKING.** Requires `rasuvaeff/yii3-metrics` ^2.1 — the backend now applies

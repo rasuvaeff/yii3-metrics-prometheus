@@ -6,7 +6,10 @@ namespace Rasuvaeff\Yii3MetricsPrometheus\Tests;
 
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Prometheus\CollectorRegistry;
+use Prometheus\Exception\StorageException;
+use Prometheus\Storage\Adapter;
 use Prometheus\Storage\InMemory;
+use Psr\Log\AbstractLogger;
 use Rasuvaeff\Yii3Metrics\MetricRegistry;
 use Rasuvaeff\Yii3MetricsPrometheus\MetricsEndpoint;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusMeterProvider;
@@ -33,5 +36,70 @@ final class MetricsEndpointTest
         Assert::string($response->getHeaderLine('Content-Type'))->contains('text/plain');
         Assert::string($response->getHeaderLine('Content-Type'))->contains('version=0.0.4');
         Assert::string((string) $response->getBody())->contains('hits_total 1');
+    }
+
+    public function returns503WhenStorageIsUnavailable(): void
+    {
+        $registry = new CollectorRegistry(new class implements Adapter {
+            public function collect(): array
+            {
+                throw new StorageException('redis unavailable');
+            }
+
+            public function updateSummary(array $data): void {}
+
+            public function updateHistogram(array $data): void {}
+
+            public function updateGauge(array $data): void {}
+
+            public function updateCounter(array $data): void {}
+
+            public function wipeStorage(): void {}
+        }, registerDefaultMetrics: false);
+        $factory = new Psr17Factory();
+        $response = (new MetricsEndpoint($registry, $factory))->handle(
+            $factory->createServerRequest('GET', 'https://x/metrics'),
+        );
+
+        Assert::same($response->getStatusCode(), 503);
+        Assert::same((string) $response->getBody(), 'metrics storage unavailable');
+        Assert::string($response->getHeaderLine('Content-Type'))->contains('text/plain');
+    }
+
+    public function logsStorageFailureContextWhenLoggerIsConfigured(): void
+    {
+        $logger = new class extends AbstractLogger {
+            /** @var list<array{message: string, context: array<string, mixed>}> */
+            public array $records = [];
+
+            #[\Override]
+            public function log($level, $message, array $context = []): void
+            {
+                $this->records[] = ['message' => (string) $message, 'context' => $context];
+            }
+        };
+        $registry = new CollectorRegistry(new class implements Adapter {
+            public function collect(): array
+            {
+                throw new StorageException('redis unavailable');
+            }
+
+            public function updateSummary(array $data): void {}
+
+            public function updateHistogram(array $data): void {}
+
+            public function updateGauge(array $data): void {}
+
+            public function updateCounter(array $data): void {}
+
+            public function wipeStorage(): void {}
+        }, registerDefaultMetrics: false);
+        $factory = new Psr17Factory();
+
+        (new MetricsEndpoint($registry, $factory, logger: $logger))->handle(
+            $factory->createServerRequest('GET', 'https://x/metrics'),
+        );
+
+        Assert::same($logger->records[0]['context'], ['exception' => 'redis unavailable']);
     }
 }

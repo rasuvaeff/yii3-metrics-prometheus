@@ -110,7 +110,7 @@ final class ConfigWiringTest
     public function webConfigBindsTheEndpoint(): void
     {
         /** @var array<string, mixed> $di */
-        $di = require dirname(__DIR__) . '/config/di-web.php';
+        $di = require __DIR__ . '/../config/di-web.php';
 
         Assert::array($di)->hasKeys(MetricsEndpoint::class);
     }
@@ -118,7 +118,7 @@ final class ConfigWiringTest
     public function paramsAreNamespaced(): void
     {
         /** @var array<string, mixed> $params */
-        $params = require dirname(__DIR__) . '/config/params.php';
+        $params = require __DIR__ . '/../config/params.php';
 
         Assert::array($params)->hasKeys('rasuvaeff/yii3-metrics-prometheus');
     }
@@ -131,11 +131,11 @@ final class ConfigWiringTest
     private function di(array $overrides = []): array
     {
         /** @var array<string, array<string, mixed>> $params */
-        $params = require dirname(__DIR__) . '/config/params.php';
+        $params = require __DIR__ . '/../config/params.php';
         $params['rasuvaeff/yii3-metrics-prometheus'] = [...$params['rasuvaeff/yii3-metrics-prometheus'], ...$overrides];
 
         /** @var array<string, mixed> $di */
-        $di = (static fn(array $params): array => require dirname(__DIR__) . '/config/di.php')($params);
+        $di = (static fn(array $params): array => require __DIR__ . '/../config/di.php')($params);
 
         return $di;
     }

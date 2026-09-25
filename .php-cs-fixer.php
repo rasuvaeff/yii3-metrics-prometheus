@@ -10,6 +10,7 @@ $finder = (new Finder())
         __DIR__ . '/src',
         __DIR__ . '/tests',
         __DIR__ . '/examples',
+        __DIR__ . '/stubs',
     ]);
 
 return (new Config())

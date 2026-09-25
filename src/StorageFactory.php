@@ -46,6 +46,8 @@ final readonly class StorageFactory
     public const string PREDIS = 'predis';
     public const string PDO = 'pdo';
 
+    public const string EVAL_SHA = 'evalsha';
+
     private const string FPM_SAPI = 'fpm-fcgi';
 
     private const string DEFAULT_PREFIX = 'PROMETHEUS_';
@@ -71,14 +73,20 @@ final readonly class StorageFactory
         }
 
         $prefix = isset($options['prefix']) ? (string) $options['prefix'] : self::DEFAULT_PREFIX;
-        $redisOptions = array_diff_key($options, ['prefix' => true]);
+        $evalSha = filter_var($options[self::EVAL_SHA] ?? false, FILTER_VALIDATE_BOOL);
+        $redisOptions = $options;
+        unset($redisOptions['prefix'], $redisOptions[self::EVAL_SHA]);
 
         return match ($adapter) {
             self::IN_MEMORY => new InMemory(),
             self::APCU, 'apc' => new APC(),
             self::APCNG => new APCng(),
-            self::REDIS => $this->redis($redisOptions, $prefix),
-            self::PREDIS => $this->predis($redisOptions, $prefix),
+            self::REDIS => $evalSha
+                ? EvalShaRedis::redis($redisOptions, $prefix)
+                : $this->redis($redisOptions, $prefix),
+            self::PREDIS => $evalSha
+                ? EvalShaRedis::predis($redisOptions, $prefix)
+                : $this->predis($redisOptions, $prefix),
             self::PDO => $this->pdo($options),
             default => throw new InvalidArgumentException(\sprintf('Unknown storage adapter "%s"', $adapter)),
         };

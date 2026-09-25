@@ -62,6 +62,10 @@ $adapter = (new StorageFactory())->create('redis', [
     'timeout' => 0.2, 'read_timeout' => 0.5,
     'database' => 2, 'prefix' => 'checkout:PROMETHEUS_',
 ]);
+// opt-in EVALSHA: записи адресуют Lua-скрипты по SHA-1, при NOSCRIPT — plain EVAL
+$adapter = (new StorageFactory())->create('predis', [
+    'host' => 'redis', 'evalsha' => true,
+]);
 // or, without apcu/redis (MySQL, PostgreSQL, SQLite):
 $adapter = (new StorageFactory())->create('pdo', [
     'dsn' => 'mysql:host=db;dbname=app',
@@ -69,6 +73,23 @@ $adapter = (new StorageFactory())->create('pdo', [
     'password' => getenv('DB_PASSWORD'),
 ]);
 ```
+
+**Что даёт `evalsha: true`.** Обычная запись в Redis несёт тело Lua-скрипта
+(несколько сотен байт). С `evalsha` запись адресует скрипт по SHA-1, поэтому
+на проводе остаются только JSON-метаданные и значения лейблов — они по-прежнему
+ездят с каждой записью, а число round trip'ов не меняется (один на запись):
+выигрыш — в размере payload, не в латентности. Скрипт запрашивается
+оптимистично — без `SCRIPT LOAD` и без состояния на клиенте, — поэтому экономия
+работает с первой записи после прогрева script-кэша Redis, и в worker'ах
+php-fpm, и в длинноживущих процессах, а режим продолжает работать там, где
+команда `SCRIPT` запрещена ACL. Ответ `NOSCRIPT` (холодный кэш, рестарт Redis,
+`SCRIPT FLUSH`) прозрачно откатывает эту запись на plain `EVAL`; неудачная
+запись бросает исключение на обоих путях (`RedisClientException`) — на phpredis
+fallback проходит ту же проверку ошибок, что и `EVALSHA`-проба. Выигрыш по
+латентности — дело буферизованных записей
+([#25](https://github.com/rasuvaeff/yii3-metrics-prometheus/issues/25), пока
+не реализовано). `evalsha` принимает обычные написания булева
+(`true`/`false`, `1`/`0`, `"yes"`/`"no"`, `"on"`/`"off"`).
 
 Неизвестное имя адаптера бросает исключение (без молчаливого fallback), а выбор
 `in_memory` под php-fpm **репортится** — scrape, который молча показывает

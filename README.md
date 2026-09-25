@@ -62,6 +62,10 @@ $adapter = (new StorageFactory())->create('redis', [
     'timeout' => 0.2, 'read_timeout' => 0.5,
     'database' => 2, 'prefix' => 'checkout:PROMETHEUS_',
 ]);
+// opt-in EVALSHA: writes address Lua scripts by SHA-1, plain EVAL after NOSCRIPT
+$adapter = (new StorageFactory())->create('predis', [
+    'host' => 'redis', 'evalsha' => true,
+]);
 // or, without apcu/redis (MySQL, PostgreSQL, SQLite):
 $adapter = (new StorageFactory())->create('pdo', [
     'dsn' => 'mysql:host=db;dbname=app',
@@ -69,6 +73,23 @@ $adapter = (new StorageFactory())->create('pdo', [
     'password' => getenv('DB_PASSWORD'),
 ]);
 ```
+
+**What `evalsha: true` saves.** Each Redis write normally carries the full Lua
+script body (several hundred bytes). With `evalsha` the write addresses the
+script by its SHA-1, so only the JSON metadata and label values stay on the
+wire — they are still sent on every write, and the number of round trips is
+unchanged (one per write): the win is payload size, not latency. The script is
+looked up optimistically — no `SCRIPT LOAD` round trip and no client-side
+state — so the saving applies from the first write after Redis's script cache
+is warm, in php-fpm workers and long-running processes alike, and the mode
+keeps working where the `SCRIPT` command is disabled by ACL. A `NOSCRIPT`
+reply (cold cache, Redis restart, `SCRIPT FLUSH`) transparently falls back to
+plain `EVAL` for that write, and a failing write throws on either path
+(`RedisClientException`) — on phpredis the fallback runs under the same error
+check as the `EVALSHA` probe. Latency wins come from buffered writes
+([#25](https://github.com/rasuvaeff/yii3-metrics-prometheus/issues/25), not
+implemented yet). `evalsha` accepts the usual boolean spellings (`true`/`false`,
+`1`/`0`, `"yes"`/`"no"`, `"on"`/`"off"`).
 
 An unknown adapter name throws (no silent fallback), and selecting `in_memory`
 under php-fpm is **reported** — a scrape that silently shows one worker's

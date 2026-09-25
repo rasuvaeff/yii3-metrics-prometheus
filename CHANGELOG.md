@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.2.0 — 2026-09-25
+
+- Add opt-in Redis/Predis `evalsha` storage mode: writes address the Lua
+  scripts by SHA-1 (`EVALSHA`, computed locally — no `SCRIPT LOAD`, no
+  client-side state) and fall back to plain `EVAL` after a Redis `NOSCRIPT`
+  reply (cold script cache, restart, `SCRIPT FLUSH`). For phpredis the NOSCRIPT
+  reply is detected through `getLastError()`, while a failing script on either
+  path — `EVALSHA` or the fallback `EVAL` — surfaces as
+  `RedisClientException` (a raw `\RedisException` is wrapped, instead of
+  bypassing the error check through promphp's `eval()` delegation).
+  Connection handling is delegated to promphp's own Redis clients.
+
 ## 2.1.0 — 2026-09-24
 
 - Add `storage_options.prefix` for Redis and Predis storage.

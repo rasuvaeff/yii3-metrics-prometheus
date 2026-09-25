@@ -120,6 +120,23 @@ rather than assuming the sibling directory is in play. The OTLP backend
   `permissions: { contents: read }`, `persist-credentials: false`. Verify with
   `zizmor --persona=auditor .github/`.
 - `examples/` is part of the public contract: keep scripts runnable.
+- `StorageFactory` keeps the historical promphp adapters by default. The
+  `evalsha: true` option is opt-in for `redis`/`predis`; it preserves promphp's
+  key schema and sends writes as optimistic `EVALSHA` (SHA-1 computed locally —
+  no `SCRIPT LOAD`, no per-instance state, so the saving applies per request
+  even under php-fpm). A `NOSCRIPT` reply (Redis restart, `SCRIPT FLUSH`) falls
+  back to `EVAL` — phpredis reports that reply from `evalSha()` via `false` +
+  `getLastError()`, while every other error reply (and connection failures)
+  arrives as a raw `\RedisException`, so `PhpRedisEvalShaClient` reads
+  `getLastError()` for the NOSCRIPT case and wraps the exception for real
+  failures. The fallback `EVAL` runs in the decorator under the same check
+  (promphp's `PHPRedis::eval()` skips it), so failures of both paths surface
+  as `RedisClientException` (`assertNoLastError` covers a reply that only
+  lands in `getLastError()`). Connection handling is delegated to promphp's
+  own `PHPRedis`/`Predis` clients; our copies of their defaults
+  are pinned to the vendor values by `EvalShaPromphpDefaultsTest`. The mode
+  reduces script payload size but does not reduce the number of round trips;
+  buffered/pipelined writes require a separate API.
 
 ## When you finish
 

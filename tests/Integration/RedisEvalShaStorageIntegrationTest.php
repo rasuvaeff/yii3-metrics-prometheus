@@ -112,6 +112,38 @@ final class RedisEvalShaStorageIntegrationTest
         }
     }
 
+    /**
+     * A failing EVALSHA must stay visible as well: SCRIPT LOAD warms the
+     * server-side script cache without executing the script, so the write
+     * reaches the script body and its error reply — which phpredis surfaces
+     * as a raw RedisException — and must surface as RedisClientException
+     * instead of the NOSCRIPT fallback.
+     */
+    public function throwsWhenEvalShaFailsOnAWarmScriptCache(): void
+    {
+        $host = getenv('REDIS_HOST');
+        if (!is_string($host) || $host === '' || !extension_loaded('redis')) {
+            return;
+        }
+
+        $port = (int) (getenv('REDIS_PORT') ?: 6379);
+        $script = 'return redis.error_reply("evalsha probe failed")';
+
+        $redis = new \Redis();
+        $redis->connect($host, $port);
+        $redis->script('load', $script);
+
+        $client = new PhpRedisEvalShaClient(['host' => $host, 'port' => $port]);
+        $client->ensureOpenConnection();
+
+        try {
+            $client->eval($script, [], 0);
+            Assert::fail('expected the EVALSHA error');
+        } catch (RedisClientException $exception) {
+            Assert::string($exception->getMessage())->contains('evalsha probe failed');
+        }
+    }
+
     public static function adapterProvider(): iterable
     {
         yield 'predis' => [StorageFactory::PREDIS];

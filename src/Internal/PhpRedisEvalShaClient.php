@@ -8,13 +8,15 @@ use Prometheus\Storage\RedisClients\PHPRedis;
 use Prometheus\Storage\RedisClients\RedisClientException;
 
 /**
- * phpredis does not throw on Redis error replies: the command returns false
- * and the message lands in getLastError(). EVALSHA failure detection therefore
- * keys off getLastError() — a NOSCRIPT reply falls back to EVAL, any other
- * error is thrown so fail-open consumers can see it. The fallback EVAL runs
- * in the decorator under the same check, so failures of both paths surface
- * as RedisClientException (a raw \RedisException from eval() is wrapped, a
- * reply that only lands in getLastError() is asserted).
+ * phpredis reports a NOSCRIPT reply from evalSha() as false + getLastError()
+ * instead of an exception; every other error reply — and any connection
+ * failure — from evalSha()/eval() arrives as a raw \RedisException.
+ * EVALSHA failure detection therefore reads getLastError() for the NOSCRIPT
+ * case (it falls back to EVAL) and wraps the exception for real failures, so
+ * fail-open consumers can see them. The fallback EVAL runs in the decorator
+ * under the same check: failures of both paths surface as
+ * RedisClientException (a raw \RedisException is wrapped, a reply that only
+ * lands in getLastError() is asserted).
  *
  * @internal
  */
@@ -53,7 +55,12 @@ final class PhpRedisEvalShaClient extends AbstractEvalShaClient
     protected function evalSha(string $sha, array $args, int $num_keys): bool
     {
         $this->redis->clearLastError();
-        $this->redis->evalSha($sha, $args, $num_keys);
+
+        try {
+            $this->redis->evalSha($sha, $args, $num_keys);
+        } catch (\RedisException $exception) {
+            throw new RedisClientException($exception->getMessage(), $exception->getCode(), $exception);
+        }
 
         return self::classifyLastError($this->redis->getLastError());
     }

@@ -107,6 +107,11 @@ rather than assuming the sibling directory is in play. The OTLP backend
 - `PrometheusMeterProvider` memoizes meters per instrumentation scope; the
   meters are thin wrappers and the accumulating state lives in the shared
   registry, so two scopes still record into the same series.
+- **Strict naming uses ONE `RegistrationGuard` per provider**, passed into every
+  scoped meter. A guard per meter would miss a conflict between two scopes,
+  though both write the same `(kind, name)` series. The guard is per process
+  and checks names without the `namespace` prefix; default is off
+  (params `strict_naming`).
 - **`Internal\Labels::order()` throws on BOTH a missing declared label and an
   undeclared one** (typo guard) — a declared label silently recorded as `""`
   merged every such observation into one empty-valued series. The typo case

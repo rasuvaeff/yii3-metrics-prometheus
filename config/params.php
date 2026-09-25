@@ -13,5 +13,8 @@ return [
         'storage_options' => [],
         // Optional metric-name prefix: `<namespace>_<name>` in the exposition.
         'namespace' => getenv('PROMETHEUS_NAMESPACE') ?: '',
+        // Reject naming-convention violations and conflicting re-registration
+        // at registration (core `RegistrationGuard`). Off by default.
+        'strict_naming' => false,
     ],
 ];

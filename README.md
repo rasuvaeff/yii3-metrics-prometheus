@@ -182,6 +182,24 @@ process-global metric prefix before adapter creation. Use a distinct prefix per
 application sharing Redis; short timeouts and persistent connections are
 recommended for metrics.
 
+### Strict naming
+
+Set params `strict_naming` to `true` (or pass
+`new PrometheusMeterProvider($registry, strictNaming: true)`) to apply the core's
+registration checks (yii3-metrics 2.3+). Registration then throws
+`InvalidArgumentException` when:
+
+- a counter does not end with `_total`, or a gauge, up-down counter or histogram does;
+- a histogram ends with `_bucket`, `_sum` or `_count`;
+- a name is re-registered with another kind, label names, buckets or a different
+  non-empty help (an empty help matches any);
+- two metrics expose the same series (histogram `latency` + gauge `latency_count`).
+
+Names are checked without the `namespace` prefix. One guard is shared by every
+scoped meter of the provider. The checks are per process: two workers that
+register the same name differently are not compared. Off by default: without it
+the first registration's help, label names and buckets win silently.
+
 ### Classes
 
 | Class | Purpose |

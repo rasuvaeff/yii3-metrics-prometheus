@@ -8,14 +8,18 @@ use Prometheus\CollectorRegistry;
 use Rasuvaeff\Yii3Metrics\CounterInterface;
 use Rasuvaeff\Yii3Metrics\GaugeInterface;
 use Rasuvaeff\Yii3Metrics\HistogramInterface;
+use Rasuvaeff\Yii3Metrics\Internal\RegistrationGuard;
 use Rasuvaeff\Yii3Metrics\Internal\Validation;
 use Rasuvaeff\Yii3Metrics\MeterInterface;
+use Rasuvaeff\Yii3Metrics\MetricKind;
 use Rasuvaeff\Yii3Metrics\UpDownCounterInterface;
 
 /**
  * Meter backed by a promphp {@see CollectorRegistry}. Instruments are memoized by
  * name (matching the core contract); the first registration's help and label
- * names win.
+ * names win — unless a {@see RegistrationGuard} is passed (strict naming), which
+ * rejects a conflicting re-registration and enforces suffix conventions. The
+ * guard sees names without the namespace prefix.
  *
  * @api
  */
@@ -36,12 +40,14 @@ final class PrometheusMeter implements MeterInterface
     public function __construct(
         private readonly CollectorRegistry $registry,
         private readonly string $namespace = '',
+        private readonly ?RegistrationGuard $guard = null,
     ) {}
 
     #[\Override]
     public function counter(string $name, string $help = '', array $labelNames = []): CounterInterface
     {
         Validation::metricName($name);
+        $this->guard?->register(kind: MetricKind::Counter, name: $name, help: $help, labelNames: $labelNames);
 
         return $this->counters[$name] ??= new PrometheusCounter(
             $this->registry->getOrRegisterCounter($this->namespace, $name, $help, $labelNames),
@@ -53,6 +59,7 @@ final class PrometheusMeter implements MeterInterface
     public function gauge(string $name, string $help = '', array $labelNames = []): GaugeInterface
     {
         Validation::metricName($name);
+        $this->guard?->register(kind: MetricKind::Gauge, name: $name, help: $help, labelNames: $labelNames);
 
         return $this->gauges[$name] ??= new PrometheusGauge(
             $this->registry->getOrRegisterGauge($this->namespace, $name, $help, $labelNames),
@@ -64,6 +71,7 @@ final class PrometheusMeter implements MeterInterface
     public function upDownCounter(string $name, string $help = '', array $labelNames = []): UpDownCounterInterface
     {
         Validation::metricName($name);
+        $this->guard?->register(kind: MetricKind::UpDownCounter, name: $name, help: $help, labelNames: $labelNames);
 
         // The Prometheus model for an up-down value is a gauge; deltas land in
         // the shared storage via incBy, so every worker adds to one series.
@@ -81,6 +89,13 @@ final class PrometheusMeter implements MeterInterface
         array $buckets = [],
     ): HistogramInterface {
         Validation::metricName($name);
+        $this->guard?->register(
+            kind: MetricKind::Histogram,
+            name: $name,
+            help: $help,
+            labelNames: $labelNames,
+            buckets: $buckets,
+        );
 
         // The core's validated bounds (its defaults when the caller passed
         // none), minus the trailing +Inf promphp owns: promphp's own default

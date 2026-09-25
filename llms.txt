@@ -59,6 +59,10 @@ $storage  = (new StorageFactory())->create('predis', ['host' => 'redis', 'evalsh
 // evalsha accepts true/false, 1/0, "yes"/"no", "on"/"off".
 $registry = new CollectorRegistry($storage, false);        // false = no default metrics
 $metrics  = new MetricRegistry(new PrometheusMeterProvider($registry));
+// new PrometheusMeterProvider($registry, namespace: '', strictNaming: true):
+// core RegistrationGuard (yii3-metrics 2.3+) — suffix rules, conflicting
+// re-registration, series collisions throw at registration; one guard shared by
+// all scoped meters; names checked without the namespace; per process.
 
 $metrics->counter('http_server_requests_total', 'help', ['method', 'route', 'status'])
     ->inc(1.0, new \Rasuvaeff\Yii3Metrics\LabelSet(['method' => 'GET', 'route' => '/x', 'status' => '200']));
@@ -89,5 +93,5 @@ return [RouteResolverInterface::class => SanitizingRouteResolver::class];
 
 ### Storage / env
 
-`PROMETHEUS_STORAGE` = `in_memory` (default) | `apcu` | `apcng` | `redis` | `predis` | `pdo`. `PROMETHEUS_NAMESPACE` prefixes every metric name. `StorageFactory::
+`PROMETHEUS_STORAGE` = `in_memory` (default) | `apcu` | `apcng` | `redis` | `predis` | `pdo`. `PROMETHEUS_NAMESPACE` prefixes every metric name. Params `strict_naming` (bool, default `false`) enables strict naming. `StorageFactory::
 create(string $adapter, array $options = []): Prometheus\Storage\Adapter`.

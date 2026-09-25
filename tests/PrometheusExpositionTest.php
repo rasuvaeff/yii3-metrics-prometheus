@@ -12,6 +12,7 @@ use Rasuvaeff\Understudy\Understudy;
 use Rasuvaeff\Yii3Metrics\Buckets;
 use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
 use Rasuvaeff\Yii3Metrics\LabelSet;
+use Rasuvaeff\Yii3Metrics\MeterInterface;
 use Rasuvaeff\Yii3Metrics\MetricRegistry;
 use Rasuvaeff\Yii3MetricsPrometheus\Internal\Amount;
 use Rasuvaeff\Yii3MetricsPrometheus\Internal\Labels;
@@ -436,6 +437,103 @@ final class PrometheusExpositionTest
         yield 'double quote' => ['we"b', 'we\"b'];
         yield 'backslash' => ['we\\b', 'we\\\\b'];
         yield 'quote closing the label block' => ['a"} 1' . "\n" . 'forged 5', 'a\"} 1\nforged 5'];
+    }
+
+    #[DataProvider('strictViolationProvider')]
+    public function strictProviderRejectsAtRegistration(\Closure $register, string $message): void
+    {
+        $meter = (new PrometheusMeterProvider($this->registry, strictNaming: true))->getMeter();
+
+        try {
+            $register($meter);
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains($message);
+        }
+    }
+
+    #[DataProvider('strictViolationProvider')]
+    public function defaultProviderStaysLenient(\Closure $register, string $message): void
+    {
+        $register((new PrometheusMeterProvider($this->registry))->getMeter());
+        $register(new PrometheusMeter(new CollectorRegistry(new InMemory(), registerDefaultMetrics: false)));
+
+        Assert::true(actual: true);
+    }
+
+    public static function strictViolationProvider(): iterable
+    {
+        yield 'counter without _total' => [static fn(MeterInterface $m) => $m->counter('requests'), 'must end with "_total"'];
+
+        yield 'gauge with _total' => [static fn(MeterInterface $m) => $m->gauge('tags_total'), 'kind gauge must not end'];
+
+        yield 'up-down counter with _total' => [
+            static fn(MeterInterface $m) => $m->upDownCounter('inflight_total'),
+            'kind up_down_counter must not end',
+        ];
+
+        yield 'histogram with _total' => [
+            static fn(MeterInterface $m) => $m->histogram('latency_total'),
+            'kind histogram must not end',
+        ];
+
+        yield 'counter re-registered with other labels' => [static function (MeterInterface $m): void {
+            $m->counter('a_total', labelNames: ['x']);
+            $m->counter('a_total', labelNames: ['y']);
+        }, 'is already registered'];
+
+        yield 'counter re-registered with other help' => [static function (MeterInterface $m): void {
+            $m->counter('a_total', 'A');
+            $m->counter('a_total', 'B');
+        }, 'is already registered'];
+
+        yield 'gauge re-registered with other labels' => [static function (MeterInterface $m): void {
+            $m->gauge('g', labelNames: ['x']);
+            $m->gauge('g', labelNames: ['y']);
+        }, 'is already registered'];
+
+        yield 'up-down counter re-registered with other labels' => [static function (MeterInterface $m): void {
+            $m->upDownCounter('u', labelNames: ['x']);
+            $m->upDownCounter('u', labelNames: ['y']);
+        }, 'is already registered'];
+
+        yield 'histogram re-registered with other buckets' => [static function (MeterInterface $m): void {
+            $m->histogram('h', labelNames: ['x'], buckets: [1.0]);
+            $m->histogram('h', labelNames: ['x'], buckets: [2.0]);
+        }, 'is already registered'];
+
+        yield 'histogram re-registered with other help' => [static function (MeterInterface $m): void {
+            $m->histogram('h', 'A');
+            $m->histogram('h', 'B');
+        }, 'is already registered'];
+    }
+
+    /**
+     * Metric state is global per `(kind, name)`, so a conflict between two
+     * instrumentation scopes is still a conflict.
+     */
+    public function strictProviderSharesOneGuardAcrossScopes(): void
+    {
+        $provider = new PrometheusMeterProvider($this->registry, strictNaming: true);
+        $provider->getMeter('orders')->counter('a_total', labelNames: ['x']);
+
+        try {
+            $provider->getMeter('billing')->counter('a_total', labelNames: ['y']);
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('counter{labels=[x]}');
+        }
+    }
+
+    public function strictNamingChecksTheNameWithoutTheNamespace(): void
+    {
+        $meter = (new PrometheusMeterProvider($this->registry, 'app', strictNaming: true))->getMeter();
+        $meter->counter('requests_total')->inc();
+        $meter->histogram('latency_seconds', buckets: [1.0])->observe(0.5);
+
+        $text = $this->render();
+        Assert::string($text)->contains('app_requests_total 1');
+        Assert::string($text)->contains('app_latency_seconds_count 1');
     }
 
     private function render(): string

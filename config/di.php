@@ -40,5 +40,6 @@ return [
     MeterProviderInterface::class => static fn (CollectorRegistry $registry): MeterProviderInterface => new PrometheusMeterProvider(
         $registry,
         (string) ($params['rasuvaeff/yii3-metrics-prometheus']['namespace'] ?? ''),
+        (bool) ($params['rasuvaeff/yii3-metrics-prometheus']['strict_naming'] ?? false),
     ),
 ];

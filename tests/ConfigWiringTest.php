@@ -6,8 +6,10 @@ namespace Rasuvaeff\Yii3MetricsPrometheus\Tests;
 
 use Prometheus\CollectorRegistry;
 use Prometheus\Storage\Adapter;
+use Prometheus\Storage\InMemory;
 use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
+use Rasuvaeff\Yii3Metrics\Exception\InvalidArgumentException;
 use Rasuvaeff\Yii3Metrics\MeterProviderInterface;
 use Rasuvaeff\Yii3Metrics\RouteResolverInterface;
 use Rasuvaeff\Yii3MetricsPrometheus\MetricsEndpoint;
@@ -82,6 +84,29 @@ final class ConfigWiringTest
         Assert::string((new PrometheusRenderer())->render($registry))->contains('probe_total 1');
     }
 
+    public function strictNamingIsOffByDefault(): void
+    {
+        $registry = new CollectorRegistry(new InMemory(), registerDefaultMetrics: false);
+        $provider = $this->di()[MeterProviderInterface::class]($registry);
+
+        $provider->getMeter()->gauge('legacy_total')->set(1.0);
+
+        Assert::string((new PrometheusRenderer())->render($registry))->contains('legacy_total 1');
+    }
+
+    public function strictNamingParamReachesTheProvider(): void
+    {
+        $registry = new CollectorRegistry(new InMemory(), registerDefaultMetrics: false);
+        $provider = $this->di(['strict_naming' => true])[MeterProviderInterface::class]($registry);
+
+        try {
+            $provider->getMeter()->gauge('legacy_total');
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('reserved for counters');
+        }
+    }
+
     public function webConfigBindsTheEndpoint(): void
     {
         /** @var array<string, mixed> $di */
@@ -99,12 +124,15 @@ final class ConfigWiringTest
     }
 
     /**
+     * @param array<string, mixed> $overrides
+     *
      * @return array<string, mixed>
      */
-    private function di(): array
+    private function di(array $overrides = []): array
     {
-        /** @var array<string, mixed> $params */
+        /** @var array<string, array<string, mixed>> $params */
         $params = require dirname(__DIR__) . '/config/params.php';
+        $params['rasuvaeff/yii3-metrics-prometheus'] = [...$params['rasuvaeff/yii3-metrics-prometheus'], ...$overrides];
 
         /** @var array<string, mixed> $di */
         $di = (static fn(array $params): array => require dirname(__DIR__) . '/config/di.php')($params);

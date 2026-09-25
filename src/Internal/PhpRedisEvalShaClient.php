@@ -11,7 +11,10 @@ use Prometheus\Storage\RedisClients\RedisClientException;
  * phpredis does not throw on Redis error replies: the command returns false
  * and the message lands in getLastError(). EVALSHA failure detection therefore
  * keys off getLastError() — a NOSCRIPT reply falls back to EVAL, any other
- * error is thrown so fail-open consumers can see it.
+ * error is thrown so fail-open consumers can see it. The fallback EVAL runs
+ * in the decorator under the same check, so failures of both paths surface
+ * as RedisClientException (a raw \RedisException from eval() is wrapped, a
+ * reply that only lands in getLastError() is asserted).
  *
  * @internal
  */
@@ -56,6 +59,23 @@ final class PhpRedisEvalShaClient extends AbstractEvalShaClient
     }
 
     /**
+     * @param mixed[] $args
+     */
+    #[\Override]
+    protected function evalFallback(string $script, array $args, int $num_keys): void
+    {
+        $this->redis->clearLastError();
+
+        try {
+            $this->redis->eval($script, $args, $num_keys);
+        } catch (\RedisException $exception) {
+            throw new RedisClientException($exception->getMessage(), $exception->getCode(), $exception);
+        }
+
+        self::assertNoLastError($this->redis->getLastError());
+    }
+
+    /**
      * Classifies the phpredis lastError after an EVALSHA call: null/'' means
      * the script ran, a NOSCRIPT prefix means the server-side script cache
      * missed, anything else is a real failure.
@@ -71,5 +91,17 @@ final class PhpRedisEvalShaClient extends AbstractEvalShaClient
         }
 
         throw new RedisClientException($error);
+    }
+
+    /**
+     * Throws on any phpredis error reply recorded for the fallback EVAL.
+     * Unlike EVALSHA, plain EVAL cannot be answered with NOSCRIPT — the script
+     * body travels with the command — so any recorded error is a real failure.
+     */
+    public static function assertNoLastError(?string $error): void
+    {
+        if ($error !== null && $error !== '') {
+            throw new RedisClientException($error);
+        }
     }
 }

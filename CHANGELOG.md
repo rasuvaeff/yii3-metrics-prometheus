@@ -11,8 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scripts by SHA-1 (`EVALSHA`, computed locally — no `SCRIPT LOAD`, no
   client-side state) and fall back to plain `EVAL` after a Redis `NOSCRIPT`
   reply (cold script cache, restart, `SCRIPT FLUSH`); for phpredis the reply
-  is detected through `getLastError()`, other errors are thrown. Connection
-  handling is delegated to promphp's own Redis clients.
+  is detected through `getLastError()`, other errors are thrown. The fallback
+  `EVAL` also runs in the decorator under the same error check, so failures of
+  both paths surface as `RedisClientException` (previously the phpredis retry
+  delegated to promphp's `eval()`, which bypassed the check and could only
+  fail with a raw `\RedisException`). Connection handling is delegated to
+  promphp's own Redis clients.
 
 ## 2.1.0 — 2026-09-24
 

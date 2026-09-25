@@ -84,7 +84,9 @@ state — so the saving applies from the first write after Redis's script cache
 is warm, in php-fpm workers and long-running processes alike, and the mode
 keeps working where the `SCRIPT` command is disabled by ACL. A `NOSCRIPT`
 reply (cold cache, Redis restart, `SCRIPT FLUSH`) transparently falls back to
-plain `EVAL` for that write. Latency wins come from buffered writes
+plain `EVAL` for that write, and a failing write throws on either path
+(`RedisClientException`) — on phpredis the fallback runs under the same error
+check as the `EVALSHA` probe. Latency wins come from buffered writes
 ([#25](https://github.com/rasuvaeff/yii3-metrics-prometheus/issues/25), not
 implemented yet). `evalsha` accepts the usual boolean spellings (`true`/`false`,
 `1`/`0`, `"yes"`/`"no"`, `"on"`/`"off"`).

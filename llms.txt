@@ -54,6 +54,7 @@ $storage  = (new StorageFactory())->create('predis', ['host' => 'redis', 'evalsh
 // Redis/Predis option evalsha=true sends each write as EVALSHA (SHA-1 computed
 // locally, no SCRIPT LOAD, no client state) and falls back to plain EVAL for a
 // write after Redis returns NOSCRIPT (cold cache, restart, SCRIPT FLUSH).
+// A failing write throws RedisClientException on either path.
 // Payload saving only: round trips and per-write metadata stay the same;
 // evalsha accepts true/false, 1/0, "yes"/"no", "on"/"off".
 $registry = new CollectorRegistry($storage, false);        // false = no default metrics

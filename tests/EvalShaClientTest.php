@@ -37,6 +37,10 @@ final class EvalShaClientTest
         $client->eval('return 1', ['a'], 1);
         $client->eval('return 1', ['a'], 1);
 
+        Assert::same($client->fallbackCalls, [
+            ['return 1', ['a'], 1],
+            ['return 1', ['a'], 1],
+        ]);
         Assert::same($client->inner->evalCalls, [
             ['return 1', ['a'], 1],
             ['return 1', ['a'], 1],
@@ -72,6 +76,19 @@ final class EvalShaClientTest
             Assert::fail('expected a RedisClientException');
         } catch (RedisClientException $exception) {
             Assert::same($exception->getMessage(), 'ERR wrong number of arguments');
+        }
+    }
+
+    public function throwsOnPhpRedisFallbackEvalErrors(): void
+    {
+        PhpRedisEvalShaClient::assertNoLastError(null);
+        PhpRedisEvalShaClient::assertNoLastError('');
+
+        try {
+            PhpRedisEvalShaClient::assertNoLastError('ERR unknown command');
+            Assert::fail('expected a RedisClientException');
+        } catch (RedisClientException $exception) {
+            Assert::same($exception->getMessage(), 'ERR unknown command');
         }
     }
 
@@ -194,6 +211,9 @@ final class RecordingEvalShaClient extends AbstractEvalShaClient
     /** @var list<array{string, list<string>, int}> */
     public array $shaCalls = [];
 
+    /** @var list<array{string, list<string>, int}> */
+    public array $fallbackCalls = [];
+
     public function __construct(
         private readonly bool $noscript = false,
         private readonly ?\Throwable $error = null,
@@ -213,5 +233,13 @@ final class RecordingEvalShaClient extends AbstractEvalShaClient
         $this->shaCalls[] = [$sha, $args, $num_keys];
 
         return !$this->noscript;
+    }
+
+    #[\Override]
+    protected function evalFallback(string $script, array $args, int $num_keys): void
+    {
+        $this->fallbackCalls[] = [$script, $args, $num_keys];
+
+        parent::evalFallback($script, $args, $num_keys);
     }
 }

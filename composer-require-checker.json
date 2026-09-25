@@ -3,7 +3,8 @@
         "PDO",
         "Predis\\Client",
         "Predis\\Response\\ServerException",
-        "Redis"
+        "Redis",
+        "RedisException"
     ],
     "php-core-extensions": [
         "Core",

@@ -36,6 +36,18 @@ abstract class AbstractEvalShaClient implements RedisClient
             return;
         }
 
+        $this->evalFallback($script, $args, $num_keys);
+    }
+
+    /**
+     * Runs the plain-EVAL retry after a NOSCRIPT reply. The default delegates
+     * to the inner client; drivers whose error replies do not surface as
+     * exceptions override it so a failing fallback stays visible.
+     *
+     * @param mixed[] $args
+     */
+    protected function evalFallback(string $script, array $args, int $num_keys): void
+    {
         $this->client->eval($script, $args, $num_keys);
     }
 

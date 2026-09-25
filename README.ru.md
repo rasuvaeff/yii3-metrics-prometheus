@@ -83,7 +83,9 @@ $adapter = (new StorageFactory())->create('pdo', [
 работает с первой записи после прогрева script-кэша Redis, и в worker'ах
 php-fpm, и в длинноживущих процессах, а режим продолжает работать там, где
 команда `SCRIPT` запрещена ACL. Ответ `NOSCRIPT` (холодный кэш, рестарт Redis,
-`SCRIPT FLUSH`) прозрачно откатывает эту запись на plain `EVAL`. Выигрыш по
+`SCRIPT FLUSH`) прозрачно откатывает эту запись на plain `EVAL`; неудачная
+запись бросает исключение на обоих путях (`RedisClientException`) — на phpredis
+fallback проходит ту же проверку ошибок, что и `EVALSHA`-проба. Выигрыш по
 латентности — дело буферизованных записей
 ([#25](https://github.com/rasuvaeff/yii3-metrics-prometheus/issues/25), пока
 не реализовано). `evalsha` принимает обычные написания булева

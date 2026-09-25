@@ -127,8 +127,13 @@ rather than assuming the sibling directory is in play. The OTLP backend
   even under php-fpm). A `NOSCRIPT` reply (Redis restart, `SCRIPT FLUSH`) falls
   back to `EVAL` — phpredis reports that reply via `false` + `getLastError()`
   instead of an exception, so `PhpRedisEvalShaClient::evalSha()` must key off
-  `getLastError()`, never off a thrown error. Connection handling is delegated
-  to promphp's own `PHPRedis`/`Predis` clients; our copies of their defaults
+  `getLastError()`, never off a thrown error. The fallback `EVAL` runs in the
+  decorator under the same check (promphp's `PHPRedis::eval()` skips it), so
+  failures of both paths surface as `RedisClientException` — a raw
+  `\RedisException` from `eval()` is wrapped, a reply that only lands in
+  `getLastError()` is asserted (`assertNoLastError`). Connection handling is
+  delegated to promphp's own `PHPRedis`/`Predis` clients; our copies of their
+  defaults
   are pinned to the vendor values by `EvalShaPromphpDefaultsTest`. The mode
   reduces script payload size but does not reduce the number of round trips;
   buffered/pipelined writes require a separate API.

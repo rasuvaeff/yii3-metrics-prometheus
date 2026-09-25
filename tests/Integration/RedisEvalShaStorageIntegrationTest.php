@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Rasuvaeff\Yii3MetricsPrometheus\Tests\Integration;
 
 use Prometheus\CollectorRegistry;
+use Prometheus\Storage\RedisClients\RedisClientException;
 use Rasuvaeff\Yii3Metrics\MetricRegistry;
+use Rasuvaeff\Yii3MetricsPrometheus\Internal\PhpRedisEvalShaClient;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusMeterProvider;
 use Rasuvaeff\Yii3MetricsPrometheus\PrometheusRenderer;
 use Rasuvaeff\Yii3MetricsPrometheus\StorageFactory;
@@ -81,6 +83,33 @@ final class RedisEvalShaStorageIntegrationTest
         Assert::true($evalShaCalls() > $evalShaMid, 'expected EVALSHA writes to resume after the fallback');
 
         $storage->wipeStorage();
+    }
+
+    /**
+     * A failing fallback EVAL must stay visible: after SCRIPT FLUSH the
+     * EVALSHA probe answers NOSCRIPT and the retry runs the script body, whose
+     * error reply phpredis surfaces as a raw RedisException or through
+     * getLastError() — the decorator reports both as RedisClientException.
+     */
+    public function throwsWhenTheFallbackEvalFails(): void
+    {
+        $host = getenv('REDIS_HOST');
+        if (!is_string($host) || $host === '' || !extension_loaded('redis')) {
+            return;
+        }
+
+        $port = (int) (getenv('REDIS_PORT') ?: 6379);
+        $this->flushScripts(StorageFactory::REDIS, $host, $port);
+
+        $client = new PhpRedisEvalShaClient(['host' => $host, 'port' => $port]);
+        $client->ensureOpenConnection();
+
+        try {
+            $client->eval('return redis.error_reply("fallback probe failed")', [], 0);
+            Assert::fail('expected the fallback EVAL error');
+        } catch (RedisClientException $exception) {
+            Assert::string($exception->getMessage())->contains('fallback probe failed');
+        }
     }
 
     public static function adapterProvider(): iterable

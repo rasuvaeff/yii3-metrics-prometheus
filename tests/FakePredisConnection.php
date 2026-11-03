@@ -24,7 +24,6 @@ final class FakePredisConnection implements NodeConnectionInterface
         public readonly ParametersInterface $parameters,
     ) {}
 
-    #[\Override]
     public function executeCommand(CommandInterface $command)
     {
         $this->commands[] = [$command->getId(), $command->getArguments()];
@@ -34,64 +33,51 @@ final class FakePredisConnection implements NodeConnectionInterface
         return $reply === null ? 'OK' : new Error($reply);
     }
 
-    #[\Override]
     public function getParameters()
     {
         return $this->parameters;
     }
 
-    #[\Override]
     public function connect(): void {}
 
-    #[\Override]
     public function disconnect(): void {}
 
-    #[\Override]
     public function isConnected(): bool
     {
         return true;
     }
 
-    #[\Override]
     public function writeRequest(CommandInterface $command): void {}
 
-    #[\Override]
     public function readResponse(CommandInterface $command)
     {
         return 'OK';
     }
 
-    #[\Override]
     public function write(string $buffer): void {}
 
-    #[\Override]
     public function __toString(): string
     {
         return 'fake';
     }
 
-    #[\Override]
     public function getResource()
     {
         return null;
     }
 
-    #[\Override]
     public function getClientId(): ?int
     {
         return null;
     }
 
-    #[\Override]
     public function addConnectCommand(CommandInterface $command): void {}
 
-    #[\Override]
     public function read()
     {
         return 'OK';
     }
 
-    #[\Override]
     public function hasDataToRead(): bool
     {
         return false;

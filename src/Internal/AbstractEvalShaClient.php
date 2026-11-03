@@ -30,8 +30,11 @@ abstract class AbstractEvalShaClient implements RedisClient
      * @param mixed[] $args
      */
     #[\Override]
-    public function eval(string $script, array $args = [], int $num_keys = 0): void
-    {
+    public function eval(
+        string $script,
+        array $args = [],
+        int $num_keys = 0,
+    ): void {
         if ($this->evalSha(sha1($script), $args, $num_keys)) {
             return;
         }

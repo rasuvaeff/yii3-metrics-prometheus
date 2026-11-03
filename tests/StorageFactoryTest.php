@@ -10,6 +10,7 @@ use Prometheus\Storage\AbstractRedis;
 use Prometheus\Storage\InMemory;
 use Prometheus\Storage\PDO as PdoAdapter;
 use Prometheus\Storage\Predis;
+use Prometheus\Storage\Redis;
 use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
@@ -23,6 +24,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(StorageFactory::class)]
+#[Covers(EvalShaRedis::class)]
 final class StorageFactoryTest
 {
     public function createsInMemoryByDefault(): void
@@ -288,5 +290,62 @@ final class StorageFactoryTest
         yield 'unknown adapter' => ['memcached', [], 'Unknown storage adapter "memcached"'];
         yield 'pdo without dsn' => [StorageFactory::PDO, [], '"dsn"'];
         yield 'pdo with empty dsn' => [StorageFactory::PDO, ['dsn' => ''], '"dsn"'];
+    }
+
+    public function appliesEvalShaPredisPrefix(): void
+    {
+        (new StorageFactory())->create(StorageFactory::PREDIS, [
+            'evalsha' => true,
+            'prefix' => 'eval:PROMETHEUS_',
+            'host' => '127.0.0.1',
+        ]);
+
+        $property = new \ReflectionProperty(AbstractRedis::class, 'prefix');
+        Assert::same($property->getValue(), 'eval:PROMETHEUS_');
+    }
+
+    public function buildsPhpRedisAdaptersAccordingToTheEvalShaOption(): void
+    {
+        RedisStub::install();
+        $prefixProperty = new \ReflectionProperty(AbstractRedis::class, 'prefix');
+
+        $plain = (new StorageFactory())->create(StorageFactory::REDIS, [
+            'prefix' => 'plain:',
+            'host' => '127.0.0.1',
+        ]);
+        Assert::instanceOf($plain, Redis::class);
+        Assert::same($prefixProperty->getValue(), 'plain:');
+
+        $evalSha = (new StorageFactory())->create(StorageFactory::REDIS, [
+            'evalsha' => true,
+            'prefix' => 'sha:',
+            'host' => '127.0.0.1',
+        ]);
+        Assert::instanceOf($evalSha, EvalShaRedis::class);
+        Assert::same($prefixProperty->getValue(), 'sha:');
+    }
+
+    public function pdoConfigCastsNumericCredentialsAndPrefixToStrings(): void
+    {
+        Assert::same((new StorageFactory())->pdoConfig([
+            'dsn' => 'sqlite::memory:',
+            'username' => 42,
+            'password' => 7,
+            'prefix' => 99,
+        ]), [
+            'dsn' => 'sqlite::memory:',
+            'username' => '42',
+            'password' => '7',
+            'prefix' => '99',
+        ]);
+    }
+
+    public function pdoConnectionsRaiseExceptionsOnErrors(): void
+    {
+        $adapter = (new StorageFactory())->create(StorageFactory::PDO, ['dsn' => 'sqlite::memory:']);
+
+        $database = (new \ReflectionProperty(PdoAdapter::class, 'database'))->getValue($adapter);
+        Assert::instanceOf($database, \PDO::class);
+        Assert::same($database->getAttribute(\PDO::ATTR_ERRMODE), \PDO::ERRMODE_EXCEPTION);
     }
 }

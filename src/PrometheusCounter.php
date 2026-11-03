@@ -28,8 +28,10 @@ final readonly class PrometheusCounter implements CounterInterface
     ) {}
 
     #[\Override]
-    public function inc(float $amount = 1.0, LabelSet $labels = new LabelSet()): void
-    {
+    public function inc(
+        float $amount = 1.0,
+        LabelSet $labels = new LabelSet(),
+    ): void {
         Amount::assertFinite($amount);
 
         if ($amount < 0) {

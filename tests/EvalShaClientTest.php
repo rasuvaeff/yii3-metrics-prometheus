@@ -14,6 +14,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(AbstractEvalShaClient::class)]
+#[Covers(PhpRedisEvalShaClient::class)]
 final class EvalShaClientTest
 {
     public function triesEvalShaFirstWithoutLoadingTheScript(): void

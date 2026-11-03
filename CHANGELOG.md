@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- `composer mutation` now runs Infection with `--with-uncovered`, so code the tests execute without naming it in `#[Covers]` is mutated and counted (overall MSI was 68% when measured this way, now 99% against `minMsi` 93). Added `PredisEvalShaClientTest` (fake Predis connection: EVALSHA/EVAL fallback, merged parameters and options), `PhpRedisEvalShaClientTest` (driven through `FakeRedis`, a never-connecting `\Redis` subclass; a minimal `\Redis` class is loaded from `tests/Stub/Redis.php` only when ext-redis is absent), `phpredis` and prefix cases in `StorageFactoryTest`, and `#[Covers]` for the EVALSHA clients and `EvalShaRedis`. `infection.json5` gained the template's signature-default ignore regex and disabled `PublicVisibility`/`ProtectedVisibility`. The `eval()`/`inc()`/`dec()` signatures of `AbstractEvalShaClient`, `PrometheusCounter` and `PrometheusGauge` now list one parameter per line (no behaviour change) so the ignore regex matches their defaults.
+
 ## 2.3.0 — 2026-09-25
 
 - Add opt-in strict naming: `strictNaming: true` on `PrometheusMeterProvider`

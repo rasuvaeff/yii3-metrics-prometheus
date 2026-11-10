@@ -141,7 +141,7 @@ final class PredisEvalShaClientTest
 
     private function innerPredis(PredisEvalShaClient $client): Client
     {
-        $property = new \ReflectionProperty(PredisEvalShaClient::class, 'client');
+        $property = new \ReflectionProperty(PredisEvalShaClient::class, 'predis');
 
         /** @var Client */
         return $property->getValue($client);

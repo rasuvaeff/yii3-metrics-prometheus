@@ -40,7 +40,7 @@ final class PredisEvalShaClient extends AbstractEvalShaClient
         'throw_errors' => true,
     ];
 
-    private readonly Client $client;
+    private readonly Client $predis;
 
     /**
      * @param array<string, mixed> $parameters
@@ -48,12 +48,12 @@ final class PredisEvalShaClient extends AbstractEvalShaClient
      */
     public function __construct(array $parameters, array $options = [])
     {
-        $this->client = new Client(
+        $this->predis = new Client(
             array_merge(self::DEFAULT_PARAMETERS, $parameters),
             array_merge(self::DEFAULT_OPTIONS, $options),
         );
 
-        parent::__construct(PromphpPredisClient::fromExistingConnection($this->client));
+        parent::__construct(PromphpPredisClient::fromExistingConnection($this->predis));
     }
 
     /**
@@ -63,7 +63,7 @@ final class PredisEvalShaClient extends AbstractEvalShaClient
     protected function evalSha(string $sha, array $args, int $num_keys): bool
     {
         try {
-            $this->client->evalsha($sha, $num_keys, ...array_values($args));
+            $this->predis->evalsha($sha, $num_keys, ...array_values($args));
         } catch (ServerException $exception) {
             if (!self::isNoScript($exception->getMessage())) {
                 throw $exception;
